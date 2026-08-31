@@ -40,6 +40,14 @@ vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
       async createCollection() { collectionExists = true; return { error_code: "Success" } }
       async loadCollection() { return { error_code: "Success" } }
       async insert(request: any) { milvusRows.push(...request.data); return { error_code: "Success" } }
+      async upsert(request: any) {
+        for (const row of request.data) {
+          const index = milvusRows.findIndex(existing => existing.chunk_id === row.chunk_id)
+          if (index === -1) milvusRows.push(row)
+          else milvusRows[index] = row
+        }
+        return { error_code: "Success" }
+      }
       async hybridSearch(request: any) {
         if (rejectRetrieval) throw new Error("derived tools must not search shared material")
         const namespaces = request.filter.match(/namespace_id in \[([^\]]+)\]/)?.[1]

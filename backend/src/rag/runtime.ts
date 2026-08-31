@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto"
+import { createHash, randomUUID } from "crypto"
 import {
   DataType,
   FunctionType,
@@ -26,7 +26,7 @@ export type SharedChunkInput = {
   namespace: string
   assetId: string
   filename: string
-  chunks: Array<{ sourceId: string; text: string }>
+  chunks: Array<{ sourceId: string; text: string; denseVector?: number[] }>
 }
 
 let client: MilvusClient | undefined
@@ -91,6 +91,12 @@ function quoted(value: string) {
   return JSON.stringify(value)
 }
 
+function sharedChunkId(input: SharedChunkInput, sourceId: string) {
+  return createHash("sha256")
+    .update([input.namespace, input.assetId, sourceId].join("\0"))
+    .digest("hex")
+}
+
 export async function indexPersonalChunks(input: PersonalChunkInput) {
   if (!input.ownerSubject || !isPersonalNamespace(input.namespace)) throw new Error("invalid personal namespace")
   await ensureCollection()
@@ -118,16 +124,16 @@ export async function indexSharedChunks(input: SharedChunkInput) {
   for (const chunk of input.chunks) {
     if (!chunk.text.trim()) continue
     rows.push({
-      chunk_id: randomUUID(),
+      chunk_id: sharedChunkId(input, chunk.sourceId),
       owner_subject: "",
       namespace_id: input.namespace,
       asset_id: input.assetId,
       filename: input.filename,
       content: chunk.text,
-      dense_vector: await embedWithVertex(chunk.text, "RETRIEVAL_DOCUMENT"),
+      dense_vector: chunk.denseVector || await embedWithVertex(chunk.text, "RETRIEVAL_DOCUMENT"),
     })
   }
-  if (rows.length) await milvus().insert({ collection_name: config.milvusCollection, data: rows })
+  if (rows.length) await milvus().upsert({ collection_name: config.milvusCollection, data: rows })
   return rows.map(row => row.chunk_id)
 }
 

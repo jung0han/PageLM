@@ -7,7 +7,8 @@
     "start": "node backend/dist/src/core/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "candidate:smoke": "node scripts/candidate-smoke.mjs"
+    "candidate:smoke": "node scripts/candidate-smoke.mjs",
+    "pilot:evidence": "tsx backend/src/pilot/cli.ts"
   },
   "authors": [
     "nullure (https://github.com/nullure)",

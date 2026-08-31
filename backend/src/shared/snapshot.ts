@@ -3,8 +3,16 @@ import fs from "fs"
 import path from "path"
 import db from "../utils/database/keyv"
 import { indexSharedChunks } from "../rag/runtime"
+import { config } from "../config/env"
+import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from "../rag/vertex"
 
-export type ArchiveSnapshotChunk = { id: string; text: string }
+export type ArchiveEmbeddingIdentity = { model: string; dimensions: number; version: string }
+export type ArchiveSnapshotChunk = {
+  id: string
+  text: string
+  denseVector?: number[]
+  embedding?: ArchiveEmbeddingIdentity
+}
 export type ArchiveSnapshotAsset = {
   id: string
   filename: string
@@ -16,6 +24,7 @@ export type ArchiveSnapshotRecord = {
   id: string
   title: string
   description?: string
+  dataSourceId?: string
   active: boolean
   admitted: boolean
   assets: ArchiveSnapshotAsset[]
@@ -46,7 +55,7 @@ export type LearningMaterial = {
   id: string
   title: string
   description: string
-  provenance: { archiveCollectionId: string; archiveRecordId: string }
+  provenance: { archiveCollectionId: string; archiveRecordId: string; archiveDataSourceId?: string }
   assets: LearningMaterialAsset[]
 }
 export type SharedNamespace = {
@@ -71,6 +80,16 @@ function requireText(value: unknown, field: string) {
 
 function stableId(...values: string[]) {
   return crypto.createHash("sha256").update(values.join("\0")).digest("hex")
+}
+
+function reusableDenseVector(chunk: ArchiveSnapshotChunk) {
+  return !!config.vertexEmbeddingVersion
+    && chunk.embedding?.model === EMBEDDING_MODEL
+    && chunk.embedding.dimensions === EMBEDDING_DIMENSIONS
+    && chunk.embedding.version === config.vertexEmbeddingVersion
+    && Array.isArray(chunk.denseVector)
+    && chunk.denseVector.length === EMBEDDING_DIMENSIONS
+    && chunk.denseVector.every(Number.isFinite)
 }
 
 function storageRoot() {
@@ -103,6 +122,9 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
   let materialCount = 0
   let assetCount = 0
   let searchRows = 0
+  let grantRows = 0
+  let denseVectorsReused = 0
+  let denseVectorsEmbedded = 0
   const index = new Set<string>(((await db.get("shared-namespace:index")) as string[]) || [])
 
   for (const collection of input.collections) {
@@ -123,9 +145,10 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
         const assetId = stableId(namespaceId, recordId, requireText(asset.id, "asset.id")).slice(0, 48)
         const destination = path.join(storageRoot(), assetId)
         await fs.promises.copyFile(sourcePath, destination)
-        const chunks = (asset.chunks || [])
+        const snapshotChunks = (asset.chunks || [])
           .filter(chunk => typeof chunk?.text === "string" && chunk.text.trim())
-          .map(chunk => ({ id: requireText(chunk.id, "chunk.id"), text: chunk.text.trim() }))
+          .map(chunk => ({ ...chunk, id: requireText(chunk.id, "chunk.id"), text: chunk.text.trim() }))
+        const chunks = snapshotChunks.map(chunk => ({ id: chunk.id, text: chunk.text }))
         const stored: StoredAsset = {
           id: assetId,
           namespaceId,
@@ -139,7 +162,14 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
           namespace: namespaceId,
           assetId,
           filename: stored.filename,
-          chunks: chunks.map(chunk => ({ sourceId: chunk.id, text: chunk.text })),
+          chunks: snapshotChunks.map(chunk => {
+            if (reusableDenseVector(chunk)) {
+              denseVectorsReused++
+              return { sourceId: chunk.id, text: chunk.text, denseVector: chunk.denseVector }
+            }
+            denseVectorsEmbedded++
+            return { sourceId: chunk.id, text: chunk.text }
+          }),
         })
         assets.push({ id: stored.id, filename: stored.filename, mimeType: stored.mimeType, chunks })
         assetCount++
@@ -150,20 +180,27 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
         id: stableId(namespaceId, recordId).slice(0, 48),
         title: requireText(record.title, "record.title"),
         description: typeof record.description === "string" ? record.description : "",
-        provenance: { archiveCollectionId: collectionId, archiveRecordId: recordId },
+        provenance: {
+          archiveCollectionId: collectionId,
+          archiveRecordId: recordId,
+          ...(record.dataSourceId ? { archiveDataSourceId: requireText(record.dataSourceId, "record.dataSourceId") } : {}),
+        },
         assets,
       })
       materialCount++
     }
 
+    const explicitUserSubjects = [...new Set((collection.explicitUserSubjects || []).filter(Boolean))]
+    const organizationSubjects = [...new Set((collection.organizationSubjects || []).filter(Boolean))]
+    grantRows += explicitUserSubjects.length + organizationSubjects.length
     const namespace: SharedNamespace = {
       id: namespaceId,
       title: requireText(collection.title, "collection.title"),
       description: typeof collection.description === "string" ? collection.description : "",
       parentId: collection.parentId ? `shared:${collection.parentId}` : null,
       snapshotId,
-      explicitUserSubjects: [...new Set((collection.explicitUserSubjects || []).filter(Boolean))],
-      organizationSubjects: [...new Set((collection.organizationSubjects || []).filter(Boolean))],
+      explicitUserSubjects,
+      organizationSubjects,
       provenance: { archiveCollectionId: collectionId },
       materials,
     }
@@ -173,16 +210,28 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
   }
 
   await db.set("shared-namespace:index", [...index])
-  return { snapshotId, namespaces: namespaceCount, materials: materialCount, assets: assetCount, searchRows }
+  return {
+    snapshotId,
+    namespaces: namespaceCount,
+    materials: materialCount,
+    assets: assetCount,
+    searchRows,
+    grantRows,
+    denseVectorsReused,
+    denseVectorsEmbedded,
+    bm25Rebuilt: true,
+    privateAssetsCopied: assetCount,
+  }
 }
 
 export async function getSharedNamespace(namespaceId: string) {
   return await db.get(`shared-namespace:${namespaceId}`) as SharedNamespace | undefined
 }
 
-export async function canAccessSharedNamespace(namespaceId: string, principal: SharedNamespacePrincipal) {
+export async function canAccessSharedNamespace(namespaceId: string, principal: SharedNamespacePrincipal | string) {
   const namespace = await getSharedNamespace(namespaceId)
-  return !!namespace && hasFlatGrant(namespace, principal)
+  const resolvedPrincipal = typeof principal === "string" ? { subject: principal } : principal
+  return !!namespace && hasFlatGrant(namespace, resolvedPrincipal)
 }
 
 export async function listSharedNamespaces(principal: SharedNamespacePrincipal) {
