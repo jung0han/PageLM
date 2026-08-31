@@ -15,6 +15,10 @@ network, so isolated readiness cannot affect live ingress. Milvus, etcd, and
 MinIO remain on the private internal network; storage volumes survive a
 redeploy and MinIO credentials are provided by the secret env file, with the
 same values passed to Milvus.
+The backend joins `proxy-net` only as a caller and must not claim the QAI-owned
+`backend-v2` alias. WorkOps supplies
+`QAI_PERSON_RESOLVER_URL=http://backend-v2:8000/api/v1/internal/qai/person` in
+the production environment.
 
 Lifecycle commands are `readiness`, `isolated-readiness`, `status`, `deploy`,
 and `rollback`. `isolated-readiness` uses a release-specific Compose project
@@ -22,6 +26,8 @@ name so the candidate can start and produce evidence without touching the
 production project. It omits the Traefik overlay and removes its containers
 afterward. Volumes are retained by default; set
 `PAGELM_ISOLATED_REMOVE_VOLUMES=true` only when isolated data is disposable.
+Candidate containers are removed by an exit trap even when readiness fails or
+the helper receives a termination signal.
 `readiness` starts the pinned stack, waits for Compose health, probes the
 backend readiness endpoint, and atomically writes secret-free evidence to
 `/srv/state/pagelm/readiness.json` by default. `deploy` records the prior

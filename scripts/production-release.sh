@@ -46,20 +46,31 @@ readiness() {
   write_evidence
   echo "readiness: passed (release $PAGELM_RELEASE_SHA)"
 }
-isolated_readiness() {
-  original_project=$PROJECT
-  original_override=${TRAEFIK_OVERRIDE:-}
+isolated_readiness() (
   PROJECT="${PROJECT}-isolated-${PAGELM_RELEASE_SHA}"
   TRAEFIK_OVERRIDE=
+
+  cleanup_isolated() {
+    readiness_status=$?
+    cleanup_status=0
+    trap - EXIT HUP INT TERM
+    if [ "${PAGELM_ISOLATED_REMOVE_VOLUMES:-false}" = true ]; then
+      compose down --volumes || cleanup_status=$?
+    else
+      compose down || cleanup_status=$?
+    fi
+    if [ "$readiness_status" -ne 0 ]; then
+      exit "$readiness_status"
+    fi
+    exit "$cleanup_status"
+  }
+  trap cleanup_isolated EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
   readiness
-  if [ "${PAGELM_ISOLATED_REMOVE_VOLUMES:-false}" = true ]; then
-    compose down --volumes
-  else
-    compose down
-  fi
-  PROJECT=$original_project
-  TRAEFIK_OVERRIDE=$original_override
-}
+)
 status() { compose ps; }
 deploy() {
   mkdir -p "$STATE_DIR"

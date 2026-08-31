@@ -14,9 +14,7 @@ services:
       - pagelm-storage:/app/storage
     networks:
       internal: {}
-      proxy-net:
-        aliases:
-          - backend-v2
+      proxy-net: {}
     expose:
       - "5000"
     depends_on:
