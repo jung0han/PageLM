@@ -39,6 +39,12 @@ readiness() {
   write_evidence
   echo "readiness: passed (release $PAGELM_RELEASE_SHA)"
 }
+isolated_readiness() {
+  original_project=$PROJECT
+  PROJECT="${PROJECT}-isolated-${PAGELM_RELEASE_SHA}"
+  readiness
+  PROJECT=$original_project
+}
 status() { compose ps; }
 deploy() {
   mkdir -p "$STATE_DIR"
@@ -56,6 +62,7 @@ rollback() {
 
 case "${1:-}" in
   readiness) readiness ;;
+  isolated-readiness) isolated_readiness ;;
   status) status ;;
   deploy) deploy ;;
   rollback) rollback ;;

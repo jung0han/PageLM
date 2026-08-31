@@ -13,8 +13,10 @@ route through Traefik labels. Milvus, etcd, and MinIO remain on the private
 internal network; storage volumes survive a redeploy and MinIO credentials are
 provided by the secret env file.
 
-Lifecycle commands are `readiness`, `status`, `deploy`, and `rollback`.
-`readiness` starts the pinned stack, waits for Compose health, probes the
+Lifecycle commands are `readiness`, `isolated-readiness`, `status`, `deploy`,
+and `rollback`. `isolated-readiness` uses a release-specific Compose project
+name so the candidate can start and produce evidence without touching the
+production project. `readiness` starts the pinned stack, waits for Compose health, probes the
 backend readiness endpoint, and atomically writes secret-free evidence to
 `/srv/state/pagelm/readiness.json` by default. `deploy` records the prior
 revision in `/srv/state/pagelm/previous-revision` before starting. `rollback`

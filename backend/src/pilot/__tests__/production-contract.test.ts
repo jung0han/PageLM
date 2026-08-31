@@ -30,7 +30,7 @@ describe('production deployment contract', () => {
   })
 
   test('exposes controlled lifecycle and recovery commands', () => {
-    for (const command of ['readiness', 'status', 'deploy', 'rollback']) {
+    for (const command of ['readiness', 'isolated-readiness', 'status', 'deploy', 'rollback']) {
       expect(release).toContain(`${command})`)
     }
     expect(release).toContain('previous-revision')
