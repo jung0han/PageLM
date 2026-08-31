@@ -1,0 +1,1 @@
+공유 candidate 정책 식별자는 SHARED-CANDIDATE-741이다.

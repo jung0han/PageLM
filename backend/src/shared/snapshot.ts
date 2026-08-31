@@ -1,0 +1,205 @@
+import crypto from "crypto"
+import fs from "fs"
+import path from "path"
+import db from "../utils/database/keyv"
+import { indexSharedChunks } from "../rag/runtime"
+
+export type ArchiveSnapshotChunk = { id: string; text: string }
+export type ArchiveSnapshotAsset = {
+  id: string
+  filename: string
+  mimeType: string
+  sourcePath: string
+  chunks: ArchiveSnapshotChunk[]
+}
+export type ArchiveSnapshotRecord = {
+  id: string
+  title: string
+  description?: string
+  active: boolean
+  admitted: boolean
+  assets: ArchiveSnapshotAsset[]
+}
+export type ArchiveSnapshotCollection = {
+  id: string
+  title: string
+  description?: string
+  parentId?: string | null
+  active: boolean
+  explicitUserSubjects: string[]
+  organizationSubjects?: string[]
+  records: ArchiveSnapshotRecord[]
+}
+export type ArchiveSnapshotInput = {
+  snapshotId: string
+  collections: ArchiveSnapshotCollection[]
+}
+
+export type LearningMaterialChunk = { id: string; text: string }
+export type LearningMaterialAsset = {
+  id: string
+  filename: string
+  mimeType: string
+  chunks: LearningMaterialChunk[]
+}
+export type LearningMaterial = {
+  id: string
+  title: string
+  description: string
+  provenance: { archiveCollectionId: string; archiveRecordId: string }
+  assets: LearningMaterialAsset[]
+}
+export type SharedNamespace = {
+  id: string
+  title: string
+  description: string
+  parentId: string | null
+  snapshotId: string
+  explicitUserSubjects: string[]
+  organizationSubjects: string[]
+  provenance: { archiveCollectionId: string }
+  materials: LearningMaterial[]
+}
+
+type StoredAsset = LearningMaterialAsset & { namespaceId: string; path: string }
+
+function requireText(value: unknown, field: string) {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`)
+  return value.trim()
+}
+
+function stableId(...values: string[]) {
+  return crypto.createHash("sha256").update(values.join("\0")).digest("hex")
+}
+
+function storageRoot() {
+  const root = path.resolve(process.cwd(), "storage", "shared-assets")
+  fs.mkdirSync(root, { recursive: true })
+  return root
+}
+
+function publicNamespace(namespace: SharedNamespace) {
+  return {
+    id: namespace.id,
+    title: namespace.title,
+    description: namespace.description,
+    parentId: namespace.parentId,
+  }
+}
+
+export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
+  const snapshotId = requireText(input?.snapshotId, "snapshotId")
+  if (!Array.isArray(input?.collections)) throw new Error("collections must be an array")
+
+  let namespaceCount = 0
+  let materialCount = 0
+  let assetCount = 0
+  let searchRows = 0
+  const index = new Set<string>(((await db.get("shared-namespace:index")) as string[]) || [])
+
+  for (const collection of input.collections) {
+    if (!collection?.active) continue
+    const collectionId = requireText(collection.id, "collection.id")
+    const namespaceId = `shared:${collectionId}`
+    const materials: LearningMaterial[] = []
+
+    for (const record of collection.records || []) {
+      if (!record?.active || !record?.admitted) continue
+      const recordId = requireText(record.id, "record.id")
+      const assets: LearningMaterialAsset[] = []
+
+      for (const asset of record.assets || []) {
+        const sourcePath = path.resolve(requireText(asset.sourcePath, "asset.sourcePath"))
+        const stat = await fs.promises.stat(sourcePath)
+        if (!stat.isFile()) throw new Error(`snapshot asset is not a file: ${sourcePath}`)
+        const assetId = stableId(namespaceId, recordId, requireText(asset.id, "asset.id")).slice(0, 48)
+        const destination = path.join(storageRoot(), assetId)
+        await fs.promises.copyFile(sourcePath, destination)
+        const chunks = (asset.chunks || [])
+          .filter(chunk => typeof chunk?.text === "string" && chunk.text.trim())
+          .map(chunk => ({ id: requireText(chunk.id, "chunk.id"), text: chunk.text.trim() }))
+        const stored: StoredAsset = {
+          id: assetId,
+          namespaceId,
+          filename: requireText(asset.filename, "asset.filename"),
+          mimeType: typeof asset.mimeType === "string" && asset.mimeType ? asset.mimeType : "application/octet-stream",
+          path: destination,
+          chunks,
+        }
+        await db.set(`shared-asset:${namespaceId}:${assetId}`, stored)
+        await indexSharedChunks({
+          namespace: namespaceId,
+          assetId,
+          filename: stored.filename,
+          chunks: chunks.map(chunk => ({ sourceId: chunk.id, text: chunk.text })),
+        })
+        assets.push({ id: stored.id, filename: stored.filename, mimeType: stored.mimeType, chunks })
+        assetCount++
+        searchRows += chunks.length
+      }
+
+      materials.push({
+        id: stableId(namespaceId, recordId).slice(0, 48),
+        title: requireText(record.title, "record.title"),
+        description: typeof record.description === "string" ? record.description : "",
+        provenance: { archiveCollectionId: collectionId, archiveRecordId: recordId },
+        assets,
+      })
+      materialCount++
+    }
+
+    const namespace: SharedNamespace = {
+      id: namespaceId,
+      title: requireText(collection.title, "collection.title"),
+      description: typeof collection.description === "string" ? collection.description : "",
+      parentId: collection.parentId ? `shared:${collection.parentId}` : null,
+      snapshotId,
+      explicitUserSubjects: [...new Set((collection.explicitUserSubjects || []).filter(Boolean))],
+      organizationSubjects: [...new Set((collection.organizationSubjects || []).filter(Boolean))],
+      provenance: { archiveCollectionId: collectionId },
+      materials,
+    }
+    await db.set(`shared-namespace:${namespaceId}`, namespace)
+    index.add(namespaceId)
+    namespaceCount++
+  }
+
+  await db.set("shared-namespace:index", [...index])
+  return { snapshotId, namespaces: namespaceCount, materials: materialCount, assets: assetCount, searchRows }
+}
+
+export async function getSharedNamespace(namespaceId: string) {
+  return await db.get(`shared-namespace:${namespaceId}`) as SharedNamespace | undefined
+}
+
+export async function canAccessSharedNamespace(namespaceId: string, subject: string) {
+  const namespace = await getSharedNamespace(namespaceId)
+  return !!namespace && namespace.explicitUserSubjects.includes(subject)
+}
+
+export async function listSharedNamespaces(subject: string) {
+  const ids = ((await db.get("shared-namespace:index")) as string[]) || []
+  const result: ReturnType<typeof publicNamespace>[] = []
+  for (const id of ids) {
+    const namespace = await getSharedNamespace(id)
+    if (namespace?.explicitUserSubjects.includes(subject)) result.push(publicNamespace(namespace))
+  }
+  return result.sort((a, b) => a.title.localeCompare(b.title))
+}
+
+export async function getSharedMaterials(namespaceId: string, subject: string) {
+  const namespace = await getSharedNamespace(namespaceId)
+  if (!namespace?.explicitUserSubjects.includes(subject)) return undefined
+  return namespace.materials
+}
+
+export async function getSharedAsset(namespaceId: string, assetId: string, subject: string) {
+  if (!await canAccessSharedNamespace(namespaceId, subject)) return undefined
+  return await db.get(`shared-asset:${namespaceId}:${assetId}`) as StoredAsset | undefined
+}
+
+export async function readArchiveSnapshotFile(filename: string) {
+  const resolved = path.resolve(filename)
+  const parsed = JSON.parse(await fs.promises.readFile(resolved, "utf8")) as ArchiveSnapshotInput
+  return absorbArchiveSnapshot(parsed)
+}

@@ -1,0 +1,35 @@
+{
+  "snapshotId": "candidate-snapshot-1116",
+  "collections": [
+    {
+      "id": "candidate-policy",
+      "title": "Candidate 정책",
+      "description": "DONGWOO-1116 비민감 공유 자료실 fixture",
+      "active": true,
+      "explicitUserSubjects": ["candidate-person"],
+      "records": [
+        {
+          "id": "candidate-policy-current",
+          "title": "Candidate 공유 정책",
+          "description": "현재 승인된 학습 자료",
+          "active": true,
+          "admitted": true,
+          "assets": [
+            {
+              "id": "candidate-shared-asset",
+              "filename": "archive-shared.txt",
+              "mimeType": "text/plain",
+              "sourcePath": "/candidate/archive-shared.txt",
+              "chunks": [
+                {
+                  "id": "candidate-shared-chunk",
+                  "text": "공유 candidate 정책 식별자는 SHARED-CANDIDATE-741이다."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
