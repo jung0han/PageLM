@@ -1,10 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AdaptiveErrorBoundary, adaptiveToast } from '@cognicatch/react'
 import { useNavigate } from "react-router-dom";
 import PromptRail from "../components/Landing/PromptRail";
 import PromptBox from "../components/Landing/PromptBox";
 import ExploreTopics from "../components/Landing/ExploreTopics";
-import { chatMultipart, chatJSON } from "../lib/api";
+import { chatMultipart, chatJSON, getModelAliases } from "../lib/api";
 
 export default function Landing() {
   const [prompt, setPrompt] = useState("");
@@ -14,9 +14,19 @@ export default function Landing() {
   const [showLength, setShowLength] = useState(false);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modelAliases, setModelAliases] = useState<string[]>(["pagelm-default"]);
+  const [model, setModel] = useState("pagelm-default");
+  const [showModels, setShowModels] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    getModelAliases().then(result => {
+      setModelAliases(result.aliases);
+      setModel(result.defaultAlias);
+    }).catch(() => undefined);
+  }, []);
 
   const onPickFile = () => fileRef.current?.click();
   const onRemoveFile = () => setStagedFile(null);
@@ -45,11 +55,11 @@ export default function Landing() {
     setBusy(true);
     try {
       if (stagedFile) {
-        const { chatId } = await chatMultipart(q || " ", [stagedFile]);
+        const { chatId } = await chatMultipart(q || " ", [stagedFile], undefined, model);
         navigate(`/chat?chatId=${encodeURIComponent(chatId)}&q=${encodeURIComponent(q)}`);
         return;
       }
-      const r = await chatJSON({ q });
+      const r = await chatJSON({ q, model });
       navigate(`/chat?chatId=${encodeURIComponent(r.chatId)}&q=${encodeURIComponent(q)}`);
     } catch {
       adaptiveToast.error("Failed to start chat", "There was a problem reaching the AI. Please try sending your prompt again.");
@@ -94,6 +104,35 @@ export default function Landing() {
         <div className="w-full md:w-fit flex">
           <div className="w-full md:w-fit md:min-w-fit p-1.5 rounded-2xl rounded-t-none bg-stone-950 flex flex-col items-start sm:items-center border border-stone-900 border-t-0 border-r-0 border-b-0 sm:border-b shadow-[inset_2px_-2px_15px] shadow-stone-900/80">
             <div className="flex items-start justify-between md:justify-start space-x-2 p-1.5 w-full">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowModels(!showModels)}
+                  className="flex items-center space-x-4 p-1.5 rounded-xl hover:bg-white/5 duration-300 transition-all"
+                >
+                  <span className="flex flex-col -space-y-0.5 pr-2 text-left">
+                    <span className="text-xs text-stone-300">Model</span>
+                    <span className="text-sm font-semibold text-white">{model}</span>
+                  </span>
+                </button>
+                {showModels && (
+                  <div className="absolute top-full left-0 mt-1 p-1 w-48 bg-stone-950 border border-stone-800 rounded-xl shadow-lg z-20">
+                    {modelAliases.map(alias => (
+                      <button
+                        type="button"
+                        key={alias}
+                        onClick={() => { setModel(alias); setShowModels(false); }}
+                        className={`block w-full text-left px-3 py-2 hover:bg-stone-800 rounded-lg ${model === alias ? "text-sky-400" : "text-white"}`}
+                      >
+                        {alias}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="w-px h-8 mx-2 bg-white/10 rounded-full mt-2" />
+
               <div className="relative">
                 <div
                   onClick={() => setShowMode(!showMode)}

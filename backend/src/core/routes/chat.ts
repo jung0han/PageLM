@@ -8,9 +8,12 @@ import {
   getMsgs,
   getSourceBag,
   setSourceBag,
+  getPrivateAsset,
 } from "../../utils/chat/chat";
 import { emitToAll } from "../../utils/chat/ws";
 import fs from "fs";
+import { allowedModelAliases, resolveModelAlias } from "../../utils/llm/llm";
+import { config } from "../../config/env";
 
 type UpFile = { path: string; filename: string; mimeType: string };
 
@@ -51,19 +54,29 @@ export function chatRoutes(app: any) {
       let q = "";
       let chatId: string | undefined;
       let files: UpFile[] = [];
+      let requestedModel: string | undefined;
 
       if (isMp) {
         const tMp = Date.now();
-        const { q: mq, chatId: mcid, files: mf } = await parseMultipart(req, req.auth.subject);
+        const { q: mq, chatId: mcid, model, files: mf } = await parseMultipart(req, req.auth.subject);
         q = mq;
         chatId = mcid;
         files = mf || [];
+        requestedModel = model;
         if (!q)
           return res.status(400).send({ error: "q required for file uploads" });
       } else {
         q = req.body?.q || "";
         chatId = req.body?.chatId;
+        requestedModel = req.body?.model;
         if (!q) return res.status(400).send({ error: "q required" });
+      }
+      let modelAlias: string;
+      try {
+        modelAlias = resolveModelAlias(requestedModel);
+      } catch {
+        for (const file of files) await fs.promises.unlink(file.path).catch(() => undefined);
+        return res.status(400).send({ error: "model alias is not allowed" });
       }
 
       let chat = chatId ? await getChat(chatId, req.auth.subject) : undefined;
@@ -97,6 +110,8 @@ export function chatRoutes(app: any) {
                 filename: f.filename,
                 contentType: f.mimeType,
                 namespace: ns,
+                chatId: id,
+                ownerSubject: req.auth.subject,
               });
             }
             emitToAll(chatSockets.get(id), {
@@ -121,6 +136,8 @@ export function chatRoutes(app: any) {
             q,
             namespace: ns,
             history: relevantHistory,
+            ownerSubject: req.auth.subject,
+            modelAlias,
           });
 
           await addMsg(id, req.auth.subject, {
@@ -131,18 +148,31 @@ export function chatRoutes(app: any) {
           emitToAll(chatSockets.get(id), { type: "answer", answer });
           emitToAll(chatSockets.get(id), { type: "done" });
         } catch (err: any) {
-          const msg = err?.message || "failed";
-          const stack = err?.stack || String(err);
-          console.error("[chat] err inner", { chatId: id, msg, stack });
-          emitToAll(chatSockets.get(id), { type: "error", error: msg });
+          console.error("[chat] processing failed", { chatId: id });
+          emitToAll(chatSockets.get(id), { type: "error", error: "chat_processing_failed" });
         }
-      })().catch((e: any) => {
-        console.error("[chat] err runner", e?.message || e);
+      })().catch(() => {
+        console.error("[chat] runner failed", { chatId: id });
       });
     } catch (e: any) {
-      console.error("[chat] err outer", e?.message || e);
+      console.error("[chat] request failed");
       next(e);
     }
+  });
+
+  app.get("/models", async (_req: any, res: any) => {
+    res.send({ ok: true, defaultAlias: config.litellmDefaultModelAlias, aliases: allowedModelAliases() });
+  });
+
+  app.get("/chats/:id/assets/:assetId", async (req: any, res: any) => {
+    const asset = await getPrivateAsset(req.params.id, req.auth.subject, req.params.assetId);
+    if (!asset) return res.status(404).send({ error: "not found" });
+    res.setHeader("Content-Type", asset.mimeType || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(asset.filename)}`);
+    fs.createReadStream(asset.path).on("error", () => {
+      if (!res.headersSent) res.status(404).send({ error: "not found" });
+      else res.destroy();
+    }).pipe(res);
   });
 
   app.get("/chats", async (req: any, res: any) => {
