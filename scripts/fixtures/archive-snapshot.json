@@ -7,6 +7,7 @@
       "description": "DONGWOO-1116 비민감 공유 자료실 fixture",
       "active": true,
       "explicitUserSubjects": ["candidate-person"],
+      "organizationSubjects": [],
       "records": [
         {
           "id": "candidate-policy-current",
@@ -24,6 +25,38 @@
                 {
                   "id": "candidate-shared-chunk",
                   "text": "공유 candidate 정책 식별자는 SHARED-CANDIDATE-741이다."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "candidate-policy-child",
+      "title": "Candidate 조직 정책",
+      "description": "상위 자료실 아래의 조직 grant fixture",
+      "parentId": "candidate-policy",
+      "active": true,
+      "explicitUserSubjects": [],
+      "organizationSubjects": ["org:candidate"],
+      "records": [
+        {
+          "id": "candidate-policy-child-current",
+          "title": "Candidate 중첩 조직 정책",
+          "description": "현재 승인된 조직 학습 자료",
+          "active": true,
+          "admitted": true,
+          "assets": [
+            {
+              "id": "candidate-shared-child-asset",
+              "filename": "archive-shared-child.txt",
+              "mimeType": "text/plain",
+              "sourcePath": "/candidate/archive-shared-child.txt",
+              "chunks": [
+                {
+                  "id": "candidate-shared-child-chunk",
+                  "text": "중첩 candidate 정책 식별자는 NESTED-CANDIDATE-842이다."
                 }
               ]
             }

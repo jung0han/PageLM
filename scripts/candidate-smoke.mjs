@@ -106,6 +106,9 @@ record("personal-upload", { chatId: upload.chatId, sentinel, authenticatedCitati
 const sharedNamespaces = await request(`${backend}/shared-namespaces`)
 const sharedNamespace = sharedNamespaces.namespaces?.find(namespace => namespace.id === "shared:candidate-policy")
 if (!sharedNamespace) throw new Error("Authorized 공유 자료실 was not listed")
+if (JSON.stringify(sharedNamespace.selectionNamespaceIds) !== JSON.stringify(["shared:candidate-policy", "shared:candidate-policy-child"])) {
+  throw new Error(`Nested picker did not disclose the exact accessible snapshot: ${JSON.stringify(sharedNamespace)}`)
+}
 const sharedMaterials = await request(`${backend}/shared-namespaces/${encodeURIComponent(sharedNamespace.id)}/materials`)
 if (!sharedMaterials.materials?.some(material => material.title === "Candidate 공유 정책")) {
   throw new Error("Record-derived 학습 자료 was not grouped under the 공유 자료실")
@@ -113,24 +116,25 @@ if (!sharedMaterials.materials?.some(material => material.title === "Candidate �
 await request(`${backend}/chats/${chat.chatId}/source-bag`, {
   method: "PUT",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ namespaceIds: [sharedNamespace.id] }),
+  body: JSON.stringify({ namespaceIds: sharedNamespace.selectionNamespaceIds }),
 })
 const selectedSourceBag = await request(`${backend}/chats/${chat.chatId}/source-bag`)
-if (JSON.stringify(selectedSourceBag.namespaceIds) !== JSON.stringify([sharedNamespace.id])) {
+if (JSON.stringify(selectedSourceBag.namespaceIds) !== JSON.stringify(sharedNamespace.selectionNamespaceIds)) {
   throw new Error(`Source bag did not preserve exact namespace IDs: ${JSON.stringify(selectedSourceBag)}`)
 }
 await request(`${backend}/chat`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ q: "Repeat SHARED-CANDIDATE-741 from the selected 공유 자료실.", chatId: chat.chatId }),
+  body: JSON.stringify({ q: "Repeat SHARED-CANDIDATE-741 and NESTED-CANDIDATE-842 from the selected 공유 자료실.", chatId: chat.chatId }),
 })
-const sharedResult = await pollAssistant(chat.chatId, "SHARED-CANDIDATE-741")
+const sharedResult = await pollAssistant(chat.chatId, "NESTED-CANDIDATE-842")
+if (!sharedResult.assistant.content.answer.includes("SHARED-CANDIDATE-741")) throw new Error("Parent material was missing from nested retrieval")
 const sharedCitation = sharedResult.assistant.content.citations?.find(item => item.url?.includes("/shared-namespaces/"))
 if (!sharedCitation?.url) throw new Error("Shared material answer omitted an authenticated citation")
 if ((await fetch(`${backend}${sharedCitation.url}`)).status !== 401) throw new Error("Shared citation was readable without a session")
 const sharedAsset = await request(`${backend}${sharedCitation.url}`)
 if (!String(sharedAsset).includes("SHARED-CANDIDATE-741")) throw new Error("Authenticated shared citation did not return the copied asset")
-record("shared-namespace", { namespaceId: sharedNamespace.id, exactSourceBag: true, authenticatedCitation: true })
+record("shared-namespace", { namespaceId: sharedNamespace.id, nestedOrganizationGrant: true, exactSourceBag: true, authenticatedCitation: true })
 
 const cardPayload = {
   question: `candidate-card-${crypto.randomUUID()}`,

@@ -1,6 +1,7 @@
 export type ActiveQaiPerson = {
   subject: string
   personId: string
+  organizationSubjects?: string[]
 }
 
 /** The only application-facing authority from an Authentik subject to a QAI learning user. */

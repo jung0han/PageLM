@@ -317,17 +317,18 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
 }
 
 export async function handleAsk(
-  q: string | { q: string; namespace?: string; history?: any[]; ownerSubject?: string; modelAlias?: string; sharedNamespaceIds?: string[] },
+  q: string | { q: string; namespace?: string; history?: any[]; ownerSubject?: string; modelAlias?: string; sharedNamespaceIds?: string[]; organizationSubjects?: string[] },
   ns?: string,
   k = 6,
   historyArg?: any[],
   ownerSubjectArg?: string,
   modelAliasArg?: string,
-  sharedNamespaceIdsArg?: string[]
+  sharedNamespaceIdsArg?: string[],
+  organizationSubjectsArg?: string[]
 ): Promise<AskPayload> {
   if (typeof q === "object" && q !== null) {
     const params = q
-    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg, params.ownerSubject ?? ownerSubjectArg, params.modelAlias ?? modelAliasArg, params.sharedNamespaceIds ?? sharedNamespaceIdsArg)
+    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg, params.ownerSubject ?? ownerSubjectArg, params.modelAlias ?? modelAliasArg, params.sharedNamespaceIds ?? sharedNamespaceIdsArg, params.organizationSubjects ?? organizationSubjectsArg)
   }
 
   const questionRaw = typeof q === "string" ? q : String(q ?? "")
@@ -337,7 +338,7 @@ export async function handleAsk(
   const rag = await execDirect({
     agent: "researcher",
     plan: { steps: [{ tool: "rag.search", input: { q: safeQ, ns: nsFinal, k }, timeoutMs: 8000, retries: 1 }] },
-    ctx: { ns: nsFinal, ownerSubject: ownerSubjectArg, sharedNamespaceIds: sharedNamespaceIdsArg }
+    ctx: { ns: nsFinal, ownerSubject: ownerSubjectArg, sharedNamespaceIds: sharedNamespaceIdsArg, organizationSubjects: organizationSubjectsArg }
   })
 
   const ctxDocs = Array.isArray(rag.result) ? (rag.result as Array<{ text?: string; meta?: any }>) : []

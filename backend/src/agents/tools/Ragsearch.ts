@@ -12,6 +12,9 @@ export const Ragsearch: ToolIO = {
     const q = toStr(input?.q ?? ctx?.q ?? "").trim()
     const ns = toStr(input?.ns ?? ctx?.ns ?? "").trim()
     const ownerSubject = toStr(ctx?.ownerSubject).trim()
+    const organizationSubjects = Array.isArray(ctx?.organizationSubjects)
+      ? ctx.organizationSubjects.map(toStr).filter(Boolean)
+      : []
     const kNum = Number(input?.k ?? 6); const k = Number.isFinite(kNum) && kNum > 0 ? Math.min(kNum, 20) : 6
     if (!q || !ownerSubject) return [{ text: "" }]
     const requestedShared = Array.isArray(ctx?.sharedNamespaceIds)
@@ -19,7 +22,7 @@ export const Ragsearch: ToolIO = {
       : []
     const allowedShared: string[] = []
     for (const namespaceId of requestedShared) {
-      if (await canAccessSharedNamespace(namespaceId, ownerSubject)) allowedShared.push(namespaceId)
+      if (await canAccessSharedNamespace(namespaceId, { subject: ownerSubject, organizationSubjects })) allowedShared.push(namespaceId)
     }
     const [personal, shared] = await Promise.all([
       searchPersonalChunks({ ownerSubject, namespace: ns, query: q, limit: k }),
