@@ -38,6 +38,18 @@ describe('production deployment contract', () => {
     expect(smoke).not.toContain('console.log(cookie)')
   })
 
+  test('smoke helper fails closed for missing or permissive cookies', () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pagelm-smoke-cookie-'))
+    const cookie = path.join(fixture, 'cookie')
+    try {
+      const missing = spawnSync('node', [path.join(root, 'scripts/production-smoke.mjs'), '--origin', 'https://archive.qai.lge.com'], { env: { ...process.env, PAGELM_SMOKE_COOKIE_FILE: cookie }, encoding: 'utf8' })
+      expect(missing.status).not.toBe(0)
+      fs.writeFileSync(cookie, 'pagelm_session=fake\n', { mode: 0o644 })
+      const permissive = spawnSync('node', [path.join(root, 'scripts/production-smoke.mjs'), '--origin', 'https://archive.qai.lge.com'], { env: { ...process.env, PAGELM_SMOKE_COOKIE_FILE: cookie }, encoding: 'utf8' })
+      expect(permissive.status).not.toBe(0)
+    } finally { fs.rmSync(fixture, { recursive: true, force: true }) }
+  })
+
   test('does not publish ports or use fixed container names', () => {
     expect(compose).not.toMatch(/^\s+ports:/m)
     expect(compose).not.toMatch(/^\s+container_name:/m)
