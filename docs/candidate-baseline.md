@@ -1,6 +1,6 @@
 # Reproducible candidate baseline
 
-This baseline proves the pinned PageLM fork can build and exercise opaque-cookie authentication, chat, personal upload, and the global Learning Bag without production Archive content or routes. It binds only to loopback (`127.0.0.1:14010`, `127.0.0.1:15000`, and `127.0.0.1:15173`), uses a project-scoped volume, and defaults to deterministic local Authentik, QAI-person, and OpenAI-compatible stubs. It does not configure ingress, DNS, TLS, Archive calls, or `archive.qai.lge.com`.
+This baseline proves the pinned PageLM fork can build and exercise opaque-cookie authentication, chat, the Vertex embedding → Milvus dense+BM25 → LiteLLM personal-upload path, authenticated citations, and the global Learning Bag without production Archive content or routes. It binds only the test endpoints to loopback (`127.0.0.1:14010`, `127.0.0.1:15000`, and `127.0.0.1:15173`), keeps Milvus private to the Compose network, and defaults to deterministic local identity, Vertex, and LiteLLM stubs. It does not configure ingress, DNS, TLS, Archive calls, or `archive.qai.lge.com`.
 
 ## Reproduce
 

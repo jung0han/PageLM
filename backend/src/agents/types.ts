@@ -8,6 +8,7 @@ export type Msg = {
 export type Ctx = {
   ns?: string
   sid?: string
+  ownerSubject?: string
   mem?: Record<string, any>
 }
 

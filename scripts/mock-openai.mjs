@@ -8,6 +8,11 @@ function vector(input) {
   return Array.from(hash.subarray(0, 16), value => (value - 127.5) / 127.5)
 }
 
+function vertexVector(input) {
+  const base = vector(input)
+  return Array.from({ length: 1536 }, (_, index) => base[index % base.length])
+}
+
 function send(res, status, payload) {
   res.writeHead(status, { "content-type": "application/json" })
   res.end(JSON.stringify(payload))
@@ -52,6 +57,13 @@ http.createServer((req, res) => {
     if (req.method === "POST" && req.url === "/oidc/revoke") return send(res, 200, { ok: true })
     let input
     try { input = JSON.parse(body || "{}") } catch { return send(res, 400, { error: { message: "invalid JSON" } }) }
+
+    if (req.method === "POST" && req.url?.includes("/publishers/google/models/gemini-embedding-001:predict")) {
+      const instances = Array.isArray(input.instances) ? input.instances : []
+      return send(res, 200, {
+        predictions: instances.map(instance => ({ embeddings: { values: vertexVector(instance.content) } })),
+      })
+    }
 
     if (req.method === "POST" && req.url?.endsWith("/embeddings")) {
       const values = Array.isArray(input.input) ? input.input : [input.input]

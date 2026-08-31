@@ -1,12 +1,13 @@
 import fs from "fs"
 import path from "path"
 import crypto from "crypto"
-import llm from "../../utils/llm/llm"
+import { generationForAlias } from "../../utils/llm/llm"
 import { execDirect } from "../../agents/runtime"
 import { normalizeTopic } from "../../utils/text/normalize"
 
 export type AskCard = { q: string; a: string; tags?: string[] }
-export type AskPayload = { topic: string; answer: string; flashcards: AskCard[] }
+export type AskCitation = { chunkId: string; filename: string; url: string }
+export type AskPayload = { topic: string; answer: string; flashcards: AskCard[]; citations?: AskCitation[] }
 
 function toText(out: any): string {
   if (!out) return ""
@@ -271,6 +272,7 @@ type AskWithContextOptions = {
   systemPrompt?: string
   history?: HistoryMessage[]
   cacheScope?: string
+  modelAlias?: string
 }
 
 export async function askWithContext(opts: AskWithContextOptions): Promise<AskPayload> {
@@ -296,7 +298,7 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
     content: `Context:\n${ctx}\n\nQuestion:\n${safeQ}\n\nTopic:\n${topic}\n\nReturn only the JSON object.`
   })
 
-  const res = await llm.call(messages as any)
+  const res = await generationForAlias(opts.modelAlias).call(messages as any)
   const draft = toText(res).trim()
   const jsonStr = extractFirstJsonObject(draft) || draft
   const parsed = tryParse<any>(jsonStr)
@@ -315,14 +317,16 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
 }
 
 export async function handleAsk(
-  q: string | { q: string; namespace?: string; history?: any[] },
+  q: string | { q: string; namespace?: string; history?: any[]; ownerSubject?: string; modelAlias?: string },
   ns?: string,
   k = 6,
-  historyArg?: any[]
+  historyArg?: any[],
+  ownerSubjectArg?: string,
+  modelAliasArg?: string
 ): Promise<AskPayload> {
   if (typeof q === "object" && q !== null) {
     const params = q
-    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg)
+    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg, params.ownerSubject ?? ownerSubjectArg, params.modelAlias ?? modelAliasArg)
   }
 
   const questionRaw = typeof q === "string" ? q : String(q ?? "")
@@ -332,19 +336,29 @@ export async function handleAsk(
   const rag = await execDirect({
     agent: "researcher",
     plan: { steps: [{ tool: "rag.search", input: { q: safeQ, ns: nsFinal, k }, timeoutMs: 8000, retries: 1 }] },
-    ctx: { ns: nsFinal }
+    ctx: { ns: nsFinal, ownerSubject: ownerSubjectArg }
   })
 
-  const ctxDocs = Array.isArray(rag) ? (rag as Array<{ text?: string }>) : []
+  const ctxDocs = Array.isArray(rag.result) ? (rag.result as Array<{ text?: string; meta?: any }>) : []
   const ctx = ctxDocs.map(d => d?.text || "").join("\n\n") || "NO_CONTEXT"
   const topic = guessTopic(safeQ) || "General"
 
-  return askWithContext({
+  const generated = await askWithContext({
     question: questionRaw,
     context: ctx,
     topic,
     history: historyArg,
     systemPrompt: BASE_SYSTEM_PROMPT,
-    cacheScope: `ans:${nsFinal}`
+    cacheScope: `ans:${nsFinal}`,
+    modelAlias: modelAliasArg,
   })
+  const chatId = nsFinal.startsWith("chat:") ? nsFinal.slice(5) : ""
+  const citations = [...new Map(ctxDocs
+    .filter(doc => doc?.meta?.assetId && doc?.meta?.chunkId && chatId)
+    .map(doc => [doc.meta.chunkId, {
+      chunkId: String(doc.meta.chunkId),
+      filename: String(doc.meta.filename || "source"),
+      url: `/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(doc.meta.assetId)}`,
+    }])).values()] as AskCitation[]
+  return citations.length ? { ...generated, citations } : generated
 }

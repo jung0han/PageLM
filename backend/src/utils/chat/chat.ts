@@ -4,6 +4,7 @@ import db from "../database/keyv";
 export type ChatMeta = { id: string; title: string; at: number };
 export type ChatMsg = { role: "user" | "assistant"; content: any; at: number };
 type StoredChat = ChatMeta & { ownerSubject: string };
+export type PrivateAsset = { id: string; chatId: string; filename: string; mimeType: string; path: string };
 
 export async function mkChat(t: string, ownerSubject: string) {
   const id = randomUUID();
@@ -57,6 +58,17 @@ export async function setSourceBag(id: string, ownerSubject: string, namespaceId
   if (!await getChat(id, ownerSubject)) return undefined;
   await db.set(`source-bag:${id}`, namespaceIds);
   return namespaceIds;
+}
+
+export async function savePrivateAsset(asset: PrivateAsset, ownerSubject: string) {
+  if (!await getChat(asset.chatId, ownerSubject)) return undefined;
+  await db.set(`asset:${ownerSubject}:${asset.chatId}:${asset.id}`, asset);
+  return asset;
+}
+
+export async function getPrivateAsset(chatId: string, ownerSubject: string, assetId: string) {
+  if (!await getChat(chatId, ownerSubject)) return undefined;
+  return await db.get(`asset:${ownerSubject}:${chatId}:${assetId}`) as PrivateAsset | undefined;
 }
 
 function publicChat(chat: StoredChat): ChatMeta {

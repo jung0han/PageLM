@@ -5,7 +5,8 @@ export type ChatMessage = { role: "user" | "assistant"; content: string; at: num
 export type ChatInfo = { id: string; title?: string; createdAt?: number };
 export type ChatsList = { ok: true; chats: ChatInfo[] };
 export type ChatDetail = { ok: true; chat: ChatInfo; messages: ChatMessage[] };
-export type ChatJSONBody = { q: string; chatId?: string };
+export type ChatJSONBody = { q: string; chatId?: string; model?: string };
+export type ModelAliases = { ok: true; defaultAlias: string; aliases: string[] };
 export type ChatPhase = "upload_start" | "upload_done" | "generating";
 export type FlashCard = { q: string; a: string; tags?: string[] };
 export type Question = { id: number; question: string; options: string[]; correct: number; hint: string; explanation: string; imageHtml?: string; };
@@ -151,16 +152,21 @@ export async function chatJSON(body: ChatJSONBody) {
   });
 }
 
-export async function chatMultipart(q: string, files: File[], chatId?: string) {
+export async function chatMultipart(q: string, files: File[], chatId?: string, model?: string) {
   const f = new FormData();
   f.append("q", q);
   if (chatId) f.append("chatId", chatId);
+  if (model) f.append("model", model);
   for (const file of files) f.append("file", file, file.name);
   return req<ChatStartResponse>(`${env.backend}/chat`, {
     method: "POST",
     body: f,
     timeout: Math.max(env.timeout, 300000),
   });
+}
+
+export function getModelAliases() {
+  return req<ModelAliases>(`${env.backend}/models`, { method: "GET" });
 }
 
 export function connectChatStream(chatId: string, onEvent: (ev: ChatEvent) => void) {
@@ -182,10 +188,11 @@ export async function chatAskOnce(opts: {
   q: string;
   files?: File[];
   chatId?: string;
+  model?: string;
   onEvent?: (ev: ChatEvent) => void;
 }) {
-  const { q, files = [], chatId, onEvent } = opts;
-  const start = files.length ? await chatMultipart(q, files, chatId) : await chatJSON({ q, chatId });
+  const { q, files = [], chatId, model, onEvent } = opts;
+  const start = files.length ? await chatMultipart(q, files, chatId, model) : await chatJSON({ q, chatId, model });
   let answer = "";
   let flashcards: FlashCard[] | undefined;
 
