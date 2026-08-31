@@ -1,0 +1,15 @@
+services:
+  backend:
+    networks:
+      traefik-public:
+        aliases:
+          - pagelm-backend
+  frontend:
+    networks:
+      traefik-public:
+        aliases:
+          - pagelm-frontend
+
+networks:
+  traefik-public:
+    external: true

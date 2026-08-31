@@ -10,6 +10,7 @@ import Composer from "../components/Chat/Composer";
 import BagFab from "../components/Chat/BagFab";
 import BagDrawer from "../components/Chat/BagDrawer";
 import LoadingIndicator from "../components/Chat/LoadingIndicator";
+import SharedSources from "../components/Chat/SharedSources";
 import { useCompanion } from "../components/Companion/CompanionProvider";
 
 type BagItem = { id: string; kind: "flashcard" | "note"; title: string; content: string };
@@ -297,6 +298,7 @@ export default function Chat() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 mt-20 lg:mt-6 mb-16">
         <div className="flex-1 pr-6">
           <div className="w-full max-w-5xl mx-auto p-4 pt-2 pb-28">
+            <SharedSources chatId={chatId} />
             <div className="space-y-6">
               {list.map((m, i) => {
                 const userBubble = "inline-block max-w-[85%] bg-stone-900/70 border border-zinc-800 rounded-2xl px-4 py-3";

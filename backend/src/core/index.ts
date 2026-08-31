@@ -1,25 +1,20 @@
-import cors from 'cors';
-import path from 'path'
-import server from '../utils/server/server'
-import { registerRoutes } from './router'
-import { loggerMiddleware } from './middleware'
+import { createApp } from './app'
+import { config } from '../config/env'
+import { readArchiveSnapshotFile } from '../shared/snapshot'
 
-process.loadEnvFile(path.resolve(process.cwd(), '.env'))
+async function main() {
+  if (config.archiveSnapshotFile) {
+    const report = await readArchiveSnapshotFile(config.archiveSnapshotFile)
+    console.log('[pagelm] Archive snapshot absorbed', report)
+  }
 
-const app = server()
+  const app = createApp()
+  app.listen(Number.parseInt(process.env.PORT || '5000'), () => {
+    console.log(`[pagelm] running on ${process.env.VITE_BACKEND_URL}`)
+  })
+}
 
-app.use(loggerMiddleware)
-app.use(cors({
-  origin: "*",
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-app.options('*', cors());
-app.use(app.serverStatic("/storage", "./storage"))
-
-registerRoutes(app)
-
-app.listen(Number.parseInt(process.env.PORT || '5000'), () => {
-  console.log(`[pagelm] running on ${process.env.VITE_BACKEND_URL}`)
+main().catch(() => {
+  console.error('[pagelm] startup failed')
+  process.exitCode = 1
 })

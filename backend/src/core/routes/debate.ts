@@ -9,16 +9,25 @@ import {
     analyzeDebate,
     DebateSession,
 } from "../../services/debate";
+import {
+    completeLearningArtifact,
+    createLearningArtifact,
+    getAuthorizedLearningArtifact,
+    resolveAssistantTurnOrigin,
+} from "../../learning/artifacts";
 
 const debateSockets = new Map<string, Set<any>>();
 const analysisSockets = new Map<string, Set<any>>();
 
 export function debateRoutes(app: any) {
-    app.ws("/ws/debate", (ws: any, req: any) => {
+    app.ws("/ws/debate", async (ws: any, req: any) => {
         const url = new URL(req.url, "http://localhost");
         const debateId = url.searchParams.get("debateId");
         if (!debateId) {
             return ws.close(1008, "debateId required");
+        }
+        if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+            return ws.close(1008, "debate not found");
         }
 
         let set = debateSockets.get(debateId);
@@ -36,11 +45,14 @@ export function debateRoutes(app: any) {
         ws.send(JSON.stringify({ type: "ready", debateId }));
     });
 
-    app.ws("/ws/debate/analyze", (ws: any, req: any) => {
+    app.ws("/ws/debate/analyze", async (ws: any, req: any) => {
         const url = new URL(req.url, "http://localhost");
         const debateId = url.searchParams.get("debateId");
         if (!debateId) {
             return ws.close(1008, "debateId required");
+        }
+        if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+            return ws.close(1008, "debate not found");
         }
 
         let set = analysisSockets.get(debateId);
@@ -60,7 +72,12 @@ export function debateRoutes(app: any) {
 
     app.post("/debate/start", async (req: any, res: any) => {
         try {
-            const { topic, position } = req.body;
+            const origin = await resolveAssistantTurnOrigin(req.body, req.auth.subject);
+            if ((req.body?.chatId || req.body?.assistantTurnId) && !origin) {
+                return res.status(404).json({ ok: false, error: "not found" });
+            }
+            const topic = String(origin?.material || req.body?.topic || "").trim();
+            const { position } = req.body;
 
             if (!topic || !topic.trim()) {
                 return res.status(400).json({
@@ -77,6 +94,8 @@ export function debateRoutes(app: any) {
             }
 
             const session = await createDebateSession(topic.trim(), position);
+            await createLearningArtifact(session.id, "debate", req.auth.subject, origin);
+            await completeLearningArtifact("debate", session.id, { output: session });
 
             res.json({
                 ok: true,
@@ -102,6 +121,10 @@ export function debateRoutes(app: any) {
         try {
             const { debateId } = req.params;
             const { argument } = req.body;
+
+            if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+                return res.status(404).json({ ok: false, error: "Debate session not found" });
+            }
 
             if (!argument || !argument.trim()) {
                 return res.status(400).json({
@@ -181,6 +204,9 @@ export function debateRoutes(app: any) {
     app.get("/debate/:debateId", async (req: any, res: any) => {
         try {
             const { debateId } = req.params;
+            if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+                return res.status(404).json({ ok: false, error: "Debate session not found" });
+            }
             const session = await getDebateSession(debateId);
 
             if (!session) {
@@ -206,9 +232,13 @@ export function debateRoutes(app: any) {
     app.get("/debates", async (req: any, res: any) => {
         try {
             const sessions = await listDebateSessions();
+            const visible: DebateSession[] = [];
+            for (const session of sessions) {
+                if (await getAuthorizedLearningArtifact("debate", session.id, req.auth.person)) visible.push(session);
+            }
             res.json({
                 ok: true,
-                debates: sessions.map((s) => ({
+                debates: visible.map((s) => ({
                     id: s.id,
                     topic: s.topic,
                     position: s.position,
@@ -228,6 +258,9 @@ export function debateRoutes(app: any) {
     app.delete("/debate/:debateId", async (req: any, res: any) => {
         try {
             const { debateId } = req.params;
+            if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+                return res.status(404).json({ ok: false, error: "Debate session not found" });
+            }
             const deleted = await deleteDebateSession(debateId);
 
             if (!deleted) {
@@ -253,6 +286,9 @@ export function debateRoutes(app: any) {
     app.post("/debate/:debateId/surrender", async (req: any, res: any) => {
         try {
             const { debateId } = req.params;
+            if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+                return res.status(404).json({ ok: false, error: "Debate session not found" });
+            }
             const session = await getDebateSession(debateId);
 
             if (!session) {
@@ -280,6 +316,9 @@ export function debateRoutes(app: any) {
     app.post("/debate/:debateId/analyze", async (req: any, res: any) => {
         try {
             const { debateId } = req.params;
+            if (!await getAuthorizedLearningArtifact("debate", debateId, req.auth.person)) {
+                return res.status(404).json({ ok: false, error: "Debate session not found" });
+            }
             const session = await getDebateSession(debateId);
 
             if (!session) {

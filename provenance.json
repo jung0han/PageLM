@@ -1,0 +1,6 @@
+{
+  "source": "https://github.com/jung0han/PageLM",
+  "upstream": "https://github.com/CaviraOSS/PageLM",
+  "upstreamRevision": "b3b4895fb3a180088b897705816a5a9786d79a92",
+  "forkRevision": "resolved from git HEAD and embedded at image build time"
+}

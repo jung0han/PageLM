@@ -3,10 +3,12 @@ import { Outlet } from "react-router-dom";
 import { AdaptiveToastProvider } from '@cognicatch/react';
 import { CompanionProvider } from "./components/Companion/CompanionProvider";
 import CompanionDock from "./components/Companion/CompanionDock";
+import AuthBoundary from "./components/AuthBoundary";
 
 export default function App() {
   return (
-    <CompanionProvider>
+    <AuthBoundary>
+      <CompanionProvider>
       <AdaptiveToastProvider
         theme="dark"
       />
@@ -17,6 +19,7 @@ export default function App() {
         </div>
       </div>
       <CompanionDock />
-    </CompanionProvider>
+      </CompanionProvider>
+    </AuthBoundary>
   );
 }

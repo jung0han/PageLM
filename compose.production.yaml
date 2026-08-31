@@ -1,0 +1,88 @@
+name: qai-pagelm
+
+services:
+  backend:
+    image: ${PAGELM_BACKEND_IMAGE:?PAGELM_BACKEND_IMAGE must be an immutable digest-pinned image}
+    env_file:
+      - ${PAGELM_ENV_FILE:-/srv/secrets/pagelm/production.env}
+    environment:
+      HOST: 0.0.0.0
+      PORT: "5000"
+      MILVUS_ADDRESS: milvus:19530
+      MINIO_ENDPOINT: minio:9000
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/pagelm-gcloud.json
+    volumes:
+      - pagelm-storage:/app/storage
+      - ${PAGELM_GOOGLE_APPLICATION_CREDENTIALS_FILE:-/home/dongwoo.jeong/.config/gcloud/application_default_credentials.json}:/run/secrets/pagelm-gcloud.json:ro
+    networks:
+      internal: {}
+      proxy-net: {}
+    expose:
+      - "5000"
+    depends_on:
+      milvus:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      pagelm.release-revision: ${PAGELM_RELEASE_SHA:?PAGELM_RELEASE_SHA must be the exact Git SHA}
+      pagelm.owner: workops-pagelm
+
+  frontend:
+    image: ${PAGELM_FRONTEND_IMAGE:?PAGELM_FRONTEND_IMAGE must be an immutable digest-pinned image}
+    networks:
+      internal: {}
+    expose:
+      - "5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      pagelm.release-revision: ${PAGELM_RELEASE_SHA:?PAGELM_RELEASE_SHA must be the exact Git SHA}
+      pagelm.owner: workops-pagelm
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18@sha256:d0a641d5fbcc89678c931a61b7de7b8a1cf097149f135c9c73bc81d076a1494b
+    command: ["etcd", "--advertise-client-urls=http://127.0.0.1:2379", "--listen-client-urls=http://0.0.0.0:2379", "--data-dir=/etcd"]
+    volumes:
+      - pagelm-etcd:/etcd
+    networks: [internal]
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be supplied by the secret env file}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be supplied by the secret env file}
+    command: ["minio", "server", "/minio_data"]
+    volumes:
+      - pagelm-minio:/minio_data
+    networks: [internal]
+
+  milvus:
+    image: milvusdb/milvus:v2.6.3@sha256:3d772c3eae3a6107b778636cea5715b9353360b92e5dcfdcaf4ca7022f4f497c
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be supplied by the secret env file}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be supplied by the secret env file}
+    volumes:
+      - pagelm-milvus:/var/lib/milvus
+    networks: [internal]
+    depends_on: [etcd, minio]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9091/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pagelm-storage:
+  pagelm-etcd:
+  pagelm-minio:
+  pagelm-milvus:
+
+networks:
+  internal:
+  proxy-net:
+    external: true

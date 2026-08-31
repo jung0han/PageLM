@@ -1,34 +1,26 @@
-import path from 'path'
+import { loadLocalEnv } from './load-env'
 
-process.loadEnvFile(path.resolve(process.cwd(), '.env'))
+loadLocalEnv()
 
 export const config = {
-  db_mode: process.env.db_mode || 'json',
   url: process.env.VITE_BACKEND_URL || '',
   timeout: Number(process.env.VITE_TIMEOUT || 90000),
-  provider: process.env.LLM_PROVIDER || 'ollama',
-  embeddings_provider: process.env.EMB_PROVIDER || 'openai',
-  openrouter: process.env.OPENROUTER_API_KEY || '',
-  openrouter_model: process.env.openrouter_model || '',
-  gemini: process.env.gemini || process.env.GOOGLE_API_KEY || '',
-  gemini_model: process.env.gemini_model || 'gemini-1.5-pro',
-  gemini_embed_model: process.env.gemini_embed_model || 'text-embedding-004',
+  vertexProjectId: process.env.VERTEX_PROJECT_ID || '',
+  vertexLocation: process.env.VERTEX_LOCATION || 'asia-northeast3',
+  vertexApiEndpoint: process.env.VERTEX_API_ENDPOINT || '',
+  vertexAccessToken: process.env.VERTEX_ACCESS_TOKEN || '',
+  vertexEmbeddingVersion: process.env.VERTEX_EMBEDDING_VERSION || '',
+  milvusAddress: process.env.MILVUS_ADDRESS || 'milvus:19530',
+  milvusToken: process.env.MILVUS_TOKEN || '',
+  milvusDatabase: process.env.MILVUS_DATABASE || 'default',
+  milvusCollection: process.env.MILVUS_COLLECTION || 'pagelm_chunks',
+  archiveSnapshotFile: process.env.ARCHIVE_SNAPSHOT_FILE || '',
+  litellmBaseUrl: process.env.LITELLM_BASE_URL || 'https://proxy.qai.lge.com/v1',
+  litellmApiKey: process.env.LITELLM_API_KEY || '',
+  litellmDefaultModelAlias: process.env.LITELLM_DEFAULT_MODEL_ALIAS || 'pagelm-default',
+  litellmAllowedModelAliases: [...new Set((process.env.LITELLM_ALLOWED_MODEL_ALIASES || 'pagelm-default')
+    .split(',').map(value => value.trim()).filter(Boolean))],
   openai: process.env.OPENAI_API_KEY || '',
-  openai_embed: process.env.OPENAI_EMBED_API_KEY || '',
-  openai_model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  openai_embed_model: process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-large',
-  claude: process.env.ANTHROPIC_API_KEY || '',
-  claude_model: process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest',
-  grok: process.env.XAI_API_KEY || '',
-  grok_model: process.env.GROK_MODEL || 'grok-2-latest',
-  grok_base: process.env.GROK_BASE || 'https://api.x.ai/v1',
-  minimax: process.env.MINIMAX_API_KEY || '',
-  minimax_model: process.env.MINIMAX_MODEL || 'MiniMax-M3',
-  ollama: {
-    model: process.env.OLLAMA_MODEL || 'llama4',
-    embedModel: process.env.OLLAMA_EMBED_MODEL || '',
-    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
-  },
   temp: Number(process.env.LLM_TEMP || 1),
   max_tokens: Number(process.env.LLM_MAXTOK || 16384),
   port: Number(process.env.PORT || 5000),

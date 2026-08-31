@@ -5,7 +5,16 @@ export type ChatMessage = { role: "user" | "assistant"; content: string; at: num
 export type ChatInfo = { id: string; title?: string; createdAt?: number };
 export type ChatsList = { ok: true; chats: ChatInfo[] };
 export type ChatDetail = { ok: true; chat: ChatInfo; messages: ChatMessage[] };
-export type ChatJSONBody = { q: string; chatId?: string };
+export type ChatJSONBody = { q: string; chatId?: string; model?: string };
+export type ModelAliases = { ok: true; defaultAlias: string; aliases: string[] };
+export type SharedNamespaceSummary = { id: string; title: string; description: string; parentId: string | null; selectionNamespaceIds: string[] };
+export type LearningMaterial = {
+  id: string;
+  title: string;
+  description: string;
+  provenance: { archiveCollectionId: string; archiveRecordId: string };
+  assets: Array<{ id: string; filename: string; mimeType: string; chunks: Array<{ id: string; text: string }> }>;
+};
 export type ChatPhase = "upload_start" | "upload_done" | "generating";
 export type FlashCard = { q: string; a: string; tags?: string[] };
 export type Question = { id: number; question: string; options: string[]; correct: number; hint: string; explanation: string; imageHtml?: string; };
@@ -78,6 +87,12 @@ export type ChatEvent =
 type O<T> = Promise<T>;
 type AnswerPayload = string | { answer: string; flashcards?: FlashCard[] };
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+  }
+}
+
 const timeoutCtl = (ms: number) => {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), ms);
@@ -91,10 +106,17 @@ async function req<T = unknown>(
   const { timeout = env.timeout, ...rest } = init;
   const { signal, done } = timeoutCtl(timeout);
   try {
-    const r = await fetch(url, { signal, ...rest });
+    let r = await fetch(url, { signal, credentials: "include", ...rest });
+    if (r.status === 401 && !url.endsWith("/auth/refresh")) {
+      const refreshed = await fetch(`${env.backend}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (refreshed.ok) r = await fetch(url, { signal, credentials: "include", ...rest });
+    }
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
-      throw new Error(`http ${r.status}: ${txt || r.statusText}`);
+      throw new ApiError(r.status, `http ${r.status}: ${txt || r.statusText}`);
     }
     const ct = r.headers.get("content-type") || "";
     if (ct.includes("application/json")) return (await r.json()) as T;
@@ -102,6 +124,20 @@ async function req<T = unknown>(
   } finally {
     done();
   }
+}
+
+export type AuthenticatedPerson = { id: string };
+
+export function getCurrentPerson() {
+  return req<{ ok: true; person: AuthenticatedPerson }>(`${env.backend}/auth/me`);
+}
+
+export function loginUrl(returnTo = window.location.pathname + window.location.search) {
+  return `${env.backend}/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export async function logout() {
+  await req<unknown>(`${env.backend}/auth/logout`, { method: "POST" });
 }
 
 const jsonHeaders = (_?: unknown) => {
@@ -124,16 +160,21 @@ export async function chatJSON(body: ChatJSONBody) {
   });
 }
 
-export async function chatMultipart(q: string, files: File[], chatId?: string) {
+export async function chatMultipart(q: string, files: File[], chatId?: string, model?: string) {
   const f = new FormData();
   f.append("q", q);
   if (chatId) f.append("chatId", chatId);
+  if (model) f.append("model", model);
   for (const file of files) f.append("file", file, file.name);
   return req<ChatStartResponse>(`${env.backend}/chat`, {
     method: "POST",
     body: f,
     timeout: Math.max(env.timeout, 300000),
   });
+}
+
+export function getModelAliases() {
+  return req<ModelAliases>(`${env.backend}/models`, { method: "GET" });
 }
 
 export function connectChatStream(chatId: string, onEvent: (ev: ChatEvent) => void) {
@@ -155,10 +196,11 @@ export async function chatAskOnce(opts: {
   q: string;
   files?: File[];
   chatId?: string;
+  model?: string;
   onEvent?: (ev: ChatEvent) => void;
 }) {
-  const { q, files = [], chatId, onEvent } = opts;
-  const start = files.length ? await chatMultipart(q, files, chatId) : await chatJSON({ q, chatId });
+  const { q, files = [], chatId, model, onEvent } = opts;
+  const start = files.length ? await chatMultipart(q, files, chatId, model) : await chatJSON({ q, chatId, model });
   let answer = "";
   let flashcards: FlashCard[] | undefined;
 
@@ -216,6 +258,26 @@ export function getChats() {
 
 export function getChatDetail(id: string) {
   return req<ChatDetail>(`${env.backend}/chats/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function getSharedNamespaces() {
+  return req<{ ok: true; namespaces: SharedNamespaceSummary[] }>(`${env.backend}/shared-namespaces`, { method: "GET" });
+}
+
+export function getSharedMaterials(namespaceId: string) {
+  return req<{ ok: true; materials: LearningMaterial[] }>(`${env.backend}/shared-namespaces/${encodeURIComponent(namespaceId)}/materials`, { method: "GET" });
+}
+
+export function getSourceBag(chatId: string) {
+  return req<{ ok: true; namespaceIds: string[] }>(`${env.backend}/chats/${encodeURIComponent(chatId)}/source-bag`, { method: "GET" });
+}
+
+export function setSourceBag(chatId: string, namespaceIds: string[]) {
+  return req<{ ok: true; namespaceIds: string[] }>(`${env.backend}/chats/${encodeURIComponent(chatId)}/source-bag`, {
+    method: "PUT",
+    headers: jsonHeaders({}),
+    body: JSON.stringify({ namespaceIds }),
+  });
 }
 
 export async function createFlashcard(input: {
