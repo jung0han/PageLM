@@ -9,6 +9,7 @@ import {
   getSourceBag,
   setSourceBag,
   getPrivateAsset,
+  type ChatMsg,
 } from "../../utils/chat/chat";
 import { canAccessSharedNamespace } from "../../shared/snapshot";
 import { emitToAll } from "../../utils/chat/ws";
@@ -197,7 +198,7 @@ export function chatRoutes(app: any) {
     // Assistant answers may contain citations into shared namespaces. Recheck
     // every recorded namespace at read time so revocation cannot expose the
     // answer or its citation metadata from chat history.
-    const messages = [];
+    const messages: ChatMsg[] = [];
     for (const message of storedMessages || []) {
       if (message.role === "assistant" && message.sharedNamespaceIds?.length) {
         const allowed = await Promise.all(message.sharedNamespaceIds.map(namespaceId =>
