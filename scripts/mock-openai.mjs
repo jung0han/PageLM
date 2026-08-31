@@ -41,6 +41,7 @@ http.createServer((req, res) => {
       classification: "person",
       active: true,
       scimDeleted: false,
+      organizationSubjects: ["org:candidate"],
     })
   }
   let body = ""

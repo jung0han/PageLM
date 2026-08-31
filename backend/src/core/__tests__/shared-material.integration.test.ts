@@ -3,6 +3,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import WebSocket from "ws"
 import type { ActiveQaiPerson, AuthentikOidc, QaiPersonResolver } from "../../auth/types"
 
 process.env.VERTEX_PROJECT_ID = "pagelm-shared-test"
@@ -242,5 +243,155 @@ describe("shared namespace public flow", () => {
     const withoutShared = await waitForAssistant(base, aliceCookie, chatId, 3)
     expect(withoutShared.answer).not.toContain("공유 정책 식별자는 SHARED-741이다.")
     expect(withoutShared.citations || []).not.toEqual(expect.arrayContaining([expect.objectContaining({ filename: "shared.txt" })]))
+  })
+
+  test("applies flat user and organization grants and snapshots only accessible descendants", async () => {
+    const suffix = crypto.randomUUID()
+    const alice = `alice-nested-${suffix}`
+    const bob = `bob-nested-${suffix}`
+    const carol = `carol-nested-${suffix}`
+    const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), "pagelm-nested-snapshot-"))
+    tempDirs.push(sourceDir)
+    const sourcePath = path.join(sourceDir, "nested.txt")
+    fs.writeFileSync(sourcePath, "nested snapshot")
+    const collection = (input: {
+      id: string
+      title: string
+      text: string
+      parentId?: string
+      users?: string[]
+      organizations?: string[]
+    }) => ({
+      id: `${input.id}-${suffix}`,
+      title: input.title,
+      parentId: input.parentId ? `${input.parentId}-${suffix}` : null,
+      active: true,
+      explicitUserSubjects: input.users || [],
+      organizationSubjects: input.organizations || [],
+      records: [{
+        id: `record-${input.id}-${suffix}`,
+        title: `${input.title} 학습 자료`,
+        active: true,
+        admitted: true,
+        assets: [{
+          id: `asset-${input.id}-${suffix}`,
+          filename: `${input.id}.txt`,
+          mimeType: "text/plain",
+          sourcePath,
+          chunks: [{ id: `chunk-${input.id}-${suffix}`, text: input.text }],
+        }],
+      }],
+    })
+
+    const { absorbArchiveSnapshot } = await import("../../shared/snapshot")
+    await absorbArchiveSnapshot({
+      snapshotId: `nested-${suffix}`,
+      collections: [
+        collection({ id: "parent", title: "상위 자료실", text: "PARENT-100", users: [alice] }),
+        collection({ id: "org-child", title: "조직 자료실", text: "ORG-200", parentId: "parent", organizations: [`org:quality-${suffix}`] }),
+        collection({ id: "hidden-child", title: "비공개 자식", text: "HIDDEN-300", parentId: "parent", users: [carol] }),
+        collection({ id: "mixed-grandchild", title: "혼합 자료실", text: "MIXED-400", parentId: "org-child", users: [bob], organizations: [`org:quality-${suffix}`] }),
+        collection({ id: "unrelated", title: "무권한 자료실", text: "DENIED-500", organizations: [`org:finance-${suffix}`] }),
+      ],
+    })
+
+    const people: Record<string, ActiveQaiPerson> = {
+      [alice]: { subject: alice, personId: `person-${alice}`, organizationSubjects: [`org:quality-${suffix}`] },
+      [bob]: { subject: bob, personId: `person-${bob}`, organizationSubjects: [`org:sales-${suffix}`] },
+      [carol]: { subject: carol, personId: `person-${carol}`, organizationSubjects: [] },
+    }
+    const { createApp } = await import("../app")
+    const app = createApp(boundaries(people))
+    const server = app.listen(0, "127.0.0.1")
+    servers.push(server)
+    await new Promise<void>(resolve => server.once("listening", resolve))
+    const address = server.address()
+    const base = `http://127.0.0.1:${address.port}`
+    const aliceCookie = await login(base, alice)
+    const bobCookie = await login(base, bob)
+    const carolCookie = await login(base, carol)
+    const ns = (id: string) => `shared:${id}-${suffix}`
+
+    const alicePicker = await (await fetch(`${base}/shared-namespaces`, { headers: { cookie: aliceCookie } })).json() as any
+    expect(alicePicker.namespaces.map((entry: any) => entry.id).sort()).toEqual([
+      ns("mixed-grandchild"), ns("org-child"), ns("parent"),
+    ].sort())
+    expect(alicePicker.namespaces.find((entry: any) => entry.id === ns("parent"))).toEqual(expect.objectContaining({
+      parentId: null,
+      selectionNamespaceIds: [ns("parent"), ns("org-child"), ns("mixed-grandchild")],
+    }))
+    expect(alicePicker.namespaces.find((entry: any) => entry.id === ns("org-child"))).toEqual(expect.objectContaining({
+      parentId: ns("parent"),
+      selectionNamespaceIds: [ns("org-child"), ns("mixed-grandchild")],
+    }))
+
+    const bobPicker = await (await fetch(`${base}/shared-namespaces`, { headers: { cookie: bobCookie } })).json() as any
+    expect(bobPicker.namespaces).toEqual([expect.objectContaining({ id: ns("mixed-grandchild"), parentId: null })])
+    const carolPicker = await (await fetch(`${base}/shared-namespaces`, { headers: { cookie: carolCookie } })).json() as any
+    expect(carolPicker.namespaces).toEqual([expect.objectContaining({ id: ns("hidden-child"), parentId: null })])
+
+    const started = await fetch(`${base}/chat`, json("POST", aliceCookie, { q: "nested 시작" }))
+    const { chatId } = await started.json() as any
+    await waitForAssistant(base, aliceCookie, chatId, 1)
+    const parentSelection = alicePicker.namespaces.find((entry: any) => entry.id === ns("parent")).selectionNamespaceIds
+    const selected = await fetch(`${base}/chats/${chatId}/source-bag`, json("PUT", aliceCookie, { namespaceIds: parentSelection }))
+    expect(await selected.json()).toEqual({ ok: true, namespaceIds: [ns("parent"), ns("org-child"), ns("mixed-grandchild")] })
+
+    await fetch(`${base}/chat`, json("POST", aliceCookie, { q: "nested 식별자", chatId }))
+    const answer = await waitForAssistant(base, aliceCookie, chatId, 2)
+    expect(answer.answer).toContain("PARENT-100")
+    expect(answer.answer).toContain("ORG-200")
+    expect(answer.answer).toContain("MIXED-400")
+    expect(answer.answer).not.toContain("HIDDEN-300")
+    expect(answer.answer).not.toContain("DENIED-500")
+    expect(answer.citations.map((citation: any) => citation.filename).sort()).toEqual([
+      "mixed-grandchild.txt", "org-child.txt", "parent.txt",
+    ])
+
+    const orgCitation = answer.citations.find((citation: any) => citation.filename === "org-child.txt")
+    expect((await fetch(`${base}${orgCitation.url}`, { headers: { cookie: aliceCookie } })).status).toBe(200)
+    expect((await fetch(`${base}${orgCitation.url}`, { headers: { cookie: bobCookie } })).status).toBe(404)
+    const mixedCitation = answer.citations.find((citation: any) => citation.filename === "mixed-grandchild.txt")
+    expect((await fetch(`${base}${mixedCitation.url}`, { headers: { cookie: bobCookie } })).status).toBe(200)
+
+    await absorbArchiveSnapshot({
+      snapshotId: `later-${suffix}`,
+      collections: [collection({
+        id: "future-child",
+        title: "나중 자식",
+        text: "FUTURE-600",
+        parentId: "parent",
+        organizations: [`org:quality-${suffix}`],
+      })],
+    })
+    const storedBag = await (await fetch(`${base}/chats/${chatId}/source-bag`, { headers: { cookie: aliceCookie } })).json() as any
+    expect(storedBag.namespaceIds).toEqual([ns("parent"), ns("org-child"), ns("mixed-grandchild")])
+    await fetch(`${base}/chat`, json("POST", aliceCookie, { q: "새 자식도 찾나요", chatId }))
+    const afterFuture = await waitForAssistant(base, aliceCookie, chatId, 3)
+    expect(afterFuture.answer).not.toContain("FUTURE-600")
+
+    people[alice] = { subject: alice, personId: `person-${alice}`, organizationSubjects: [] }
+    const afterRevocation = await (await fetch(`${base}/shared-namespaces`, { headers: { cookie: aliceCookie } })).json() as any
+    expect(afterRevocation.namespaces.map((entry: any) => entry.id)).toEqual([ns("parent")])
+    expect((await fetch(`${base}${orgCitation.url}`, { headers: { cookie: aliceCookie } })).status).toBe(404)
+    const streamedAfterRevocation = new Promise<any>((resolve, reject) => {
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/chat?chatId=${chatId}`, { headers: { cookie: aliceCookie } })
+      const timeout = setTimeout(() => { ws.close(); reject(new Error("stream timeout")) }, 5_000)
+      ws.on("message", data => {
+        const event = JSON.parse(data.toString())
+        if (event.type === "ready") {
+          void fetch(`${base}/chat`, json("POST", aliceCookie, { q: "조직 회수 후", chatId }))
+        }
+        if (event.type === "answer") {
+          clearTimeout(timeout)
+          ws.close()
+          resolve(event.answer)
+        }
+      })
+    })
+    const afterOrgRevocation = await streamedAfterRevocation
+    expect(afterOrgRevocation.answer).toContain("PARENT-100")
+    expect(afterOrgRevocation.answer).not.toContain("ORG-200")
+    expect(afterOrgRevocation.answer).not.toContain("MIXED-400")
   })
 })

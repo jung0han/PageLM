@@ -9,6 +9,7 @@ export type Ctx = {
   ns?: string
   sid?: string
   ownerSubject?: string
+  organizationSubjects?: string[]
   mem?: Record<string, any>
 }
 

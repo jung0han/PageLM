@@ -7,7 +7,7 @@ export type ChatsList = { ok: true; chats: ChatInfo[] };
 export type ChatDetail = { ok: true; chat: ChatInfo; messages: ChatMessage[] };
 export type ChatJSONBody = { q: string; chatId?: string; model?: string };
 export type ModelAliases = { ok: true; defaultAlias: string; aliases: string[] };
-export type SharedNamespaceSummary = { id: string; title: string; description: string; parentId: string | null };
+export type SharedNamespaceSummary = { id: string; title: string; description: string; parentId: string | null; selectionNamespaceIds: string[] };
 export type LearningMaterial = {
   id: string;
   title: string;

@@ -62,6 +62,7 @@ export type SharedNamespace = {
 }
 
 type StoredAsset = LearningMaterialAsset & { namespaceId: string; path: string }
+export type SharedNamespacePrincipal = { subject: string; organizationSubjects?: string[] }
 
 function requireText(value: unknown, field: string) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`)
@@ -78,13 +79,20 @@ function storageRoot() {
   return root
 }
 
-function publicNamespace(namespace: SharedNamespace) {
+function publicNamespace(namespace: SharedNamespace, accessibleIds: Set<string>, selectionNamespaceIds: string[]) {
   return {
     id: namespace.id,
     title: namespace.title,
     description: namespace.description,
-    parentId: namespace.parentId,
+    parentId: namespace.parentId && accessibleIds.has(namespace.parentId) ? namespace.parentId : null,
+    selectionNamespaceIds,
   }
+}
+
+function hasFlatGrant(namespace: SharedNamespace, principal: SharedNamespacePrincipal) {
+  if (namespace.explicitUserSubjects.includes(principal.subject)) return true
+  const currentOrganizations = new Set(principal.organizationSubjects || [])
+  return namespace.organizationSubjects.some(subject => currentOrganizations.has(subject))
 }
 
 export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
@@ -172,29 +180,60 @@ export async function getSharedNamespace(namespaceId: string) {
   return await db.get(`shared-namespace:${namespaceId}`) as SharedNamespace | undefined
 }
 
-export async function canAccessSharedNamespace(namespaceId: string, subject: string) {
+export async function canAccessSharedNamespace(namespaceId: string, principal: SharedNamespacePrincipal) {
   const namespace = await getSharedNamespace(namespaceId)
-  return !!namespace && namespace.explicitUserSubjects.includes(subject)
+  return !!namespace && hasFlatGrant(namespace, principal)
 }
 
-export async function listSharedNamespaces(subject: string) {
+export async function listSharedNamespaces(principal: SharedNamespacePrincipal) {
   const ids = ((await db.get("shared-namespace:index")) as string[]) || []
-  const result: ReturnType<typeof publicNamespace>[] = []
+  const accessible = new Map<string, SharedNamespace>()
   for (const id of ids) {
     const namespace = await getSharedNamespace(id)
-    if (namespace?.explicitUserSubjects.includes(subject)) result.push(publicNamespace(namespace))
+    if (namespace && hasFlatGrant(namespace, principal)) accessible.set(id, namespace)
   }
-  return result.sort((a, b) => a.title.localeCompare(b.title))
+  const accessibleIds = new Set(accessible.keys())
+  const children = new Map<string | null, SharedNamespace[]>()
+  for (const namespace of accessible.values()) {
+    const parentId = namespace.parentId && accessibleIds.has(namespace.parentId) ? namespace.parentId : null
+    const siblings = children.get(parentId) || []
+    siblings.push(namespace)
+    children.set(parentId, siblings)
+  }
+  for (const siblings of children.values()) siblings.sort((a, b) => a.title.localeCompare(b.title))
+  const descendants = (rootId: string) => {
+    const result: string[] = []
+    const visited = new Set<string>()
+    const visit = (id: string) => {
+      if (visited.has(id)) return
+      visited.add(id)
+      result.push(id)
+      for (const namespace of children.get(id) || []) visit(namespace.id)
+    }
+    visit(rootId)
+    return result
+  }
+  const ordered: SharedNamespace[] = []
+  const emitted = new Set<string>()
+  const append = (namespace: SharedNamespace) => {
+    if (emitted.has(namespace.id)) return
+    emitted.add(namespace.id)
+    ordered.push(namespace)
+    for (const child of children.get(namespace.id) || []) append(child)
+  }
+  for (const root of children.get(null) || []) append(root)
+  for (const namespace of accessible.values()) append(namespace)
+  return ordered.map(namespace => publicNamespace(namespace, accessibleIds, descendants(namespace.id)))
 }
 
-export async function getSharedMaterials(namespaceId: string, subject: string) {
+export async function getSharedMaterials(namespaceId: string, principal: SharedNamespacePrincipal) {
   const namespace = await getSharedNamespace(namespaceId)
-  if (!namespace?.explicitUserSubjects.includes(subject)) return undefined
+  if (!namespace || !hasFlatGrant(namespace, principal)) return undefined
   return namespace.materials
 }
 
-export async function getSharedAsset(namespaceId: string, assetId: string, subject: string) {
-  if (!await canAccessSharedNamespace(namespaceId, subject)) return undefined
+export async function getSharedAsset(namespaceId: string, assetId: string, principal: SharedNamespacePrincipal) {
+  if (!await canAccessSharedNamespace(namespaceId, principal)) return undefined
   return await db.get(`shared-asset:${namespaceId}:${assetId}`) as StoredAsset | undefined
 }
 

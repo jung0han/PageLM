@@ -39,9 +39,11 @@ export default function SharedSources({ chatId }: Props) {
   }, [materials, selected]);
 
   const toggle = async (namespaceId: string) => {
+    const namespace = namespaces.find(entry => entry.id === namespaceId);
+    const expansion = namespace?.selectionNamespaceIds?.length ? namespace.selectionNamespaceIds : [namespaceId];
     const next = selected.includes(namespaceId)
-      ? selected.filter(id => id !== namespaceId)
-      : [...selected, namespaceId];
+      ? selected.filter(id => !expansion.includes(id))
+      : [...new Set([...selected, ...expansion])];
     setSaving(true);
     try {
       const saved = await setSourceBag(chatId, next);
@@ -62,8 +64,20 @@ export default function SharedSources({ chatId }: Props) {
       <div className="space-y-3">
         {namespaces.map(namespace => {
           const checked = selected.includes(namespace.id);
+          const included = namespace.selectionNamespaceIds
+            .filter(id => id !== namespace.id)
+            .map(id => namespaces.find(entry => entry.id === id)?.title)
+            .filter(Boolean);
+          let depth = 0;
+          let parentId = namespace.parentId;
+          const visited = new Set<string>();
+          while (parentId && !visited.has(parentId)) {
+            visited.add(parentId);
+            depth++;
+            parentId = namespaces.find(entry => entry.id === parentId)?.parentId || null;
+          }
           return (
-            <div key={namespace.id} className="rounded-xl border border-zinc-800 bg-black/30 px-4 py-3">
+            <div key={namespace.id} className="rounded-xl border border-zinc-800 bg-black/30 px-4 py-3" style={{ marginLeft: `${depth * 16}px` }}>
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
@@ -75,6 +89,9 @@ export default function SharedSources({ chatId }: Props) {
                 <span>
                   <span className="block text-sm font-medium text-stone-100">{namespace.title}</span>
                   {namespace.description && <span className="block text-xs text-stone-400">{namespace.description}</span>}
+                  {included.length > 0 && (
+                    <span className="mt-1 block text-xs text-stone-500">선택 시 포함: {included.join(", ")}</span>
+                  )}
                 </span>
               </label>
               {checked && (

@@ -141,6 +141,7 @@ export function chatRoutes(app: any) {
             ownerSubject: req.auth.subject,
             modelAlias,
             sharedNamespaceIds,
+            organizationSubjects: req.auth.person.organizationSubjects || [],
           });
 
           await addMsg(id, req.auth.subject, {
@@ -207,7 +208,10 @@ export function chatRoutes(app: any) {
       return res.status(400).send({ error: "namespaceIds must be an array of IDs" });
     }
     for (const namespaceId of namespaceIds) {
-      if (!await canAccessSharedNamespace(namespaceId, req.auth.subject)) {
+      if (!await canAccessSharedNamespace(namespaceId, {
+        subject: req.auth.subject,
+        organizationSubjects: req.auth.person.organizationSubjects,
+      })) {
         return res.status(404).send({ error: "not found" });
       }
     }

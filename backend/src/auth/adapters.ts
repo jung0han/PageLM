@@ -94,6 +94,13 @@ export class HttpQaiPersonResolver implements QaiPersonResolver {
       person.scimDeleted !== false ||
       !person.id
     ) return null
-    return { subject, personId: String(person.id) }
+    const organizationSubjects: string[] = Array.isArray(person.organizationSubjects)
+      ? [...new Set<string>(person.organizationSubjects.filter((value: unknown): value is string => typeof value === "string" && !!value))]
+      : []
+    return {
+      subject,
+      personId: String(person.id),
+      organizationSubjects,
+    }
   }
 }
