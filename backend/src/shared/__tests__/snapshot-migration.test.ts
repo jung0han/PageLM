@@ -41,6 +41,13 @@ vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
         }
         return { error_code: "Success" }
       }
+      async delete(request: any) {
+        const namespace = request.filter.match(/namespace_id == "([^"]+)"/)?.[1]
+        for (let index = insertedRows.length - 1; index >= 0; index--) {
+          if (!namespace || insertedRows[index].namespace_id === namespace) insertedRows.splice(index, 1)
+        }
+        return { error_code: "Success" }
+      }
     },
   }
 })
@@ -151,5 +158,34 @@ describe("Archive snapshot migration", () => {
 
     expect(insertedRows).toHaveLength(1)
     expect(insertedRows[0].chunk_id).toBe(firstId)
+  })
+
+  test("replaces removed collections, records, assets, and chunks", async () => {
+    const suffix = crypto.randomUUID()
+    const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), "pagelm-pilot-replace-"))
+    tempDirs.push(sourceDir)
+    const oldSource = path.join(sourceDir, "old.txt")
+    const currentSource = path.join(sourceDir, "current.txt")
+    fs.writeFileSync(oldSource, "old")
+    fs.writeFileSync(currentSource, "current")
+    const { absorbArchiveSnapshot, getSharedAsset, getSharedMaterials, listSharedNamespaces } = await import("../snapshot")
+    const oldNamespace = `shared:old-${suffix}`
+    const currentNamespace = `shared:current-${suffix}`
+    await absorbArchiveSnapshot({
+      snapshotId: `old-${suffix}`,
+      collections: [{ id: `old-${suffix}`, title: "Old", active: true, explicitUserSubjects: [`person-${suffix}`], records: [{ id: `old-record-${suffix}`, title: "Old record", active: true, admitted: true, assets: [{ id: `old-asset-${suffix}`, filename: "old.txt", mimeType: "text/plain", sourcePath: oldSource, chunks: [{ id: `old-chunk-${suffix}`, text: "OLD-SEARCH" }] }] }] }],
+    })
+    const oldAsset = (await getSharedMaterials(oldNamespace, { subject: `person-${suffix}` }))![0].assets[0]
+    expect(insertedRows.some(row => row.content === "OLD-SEARCH")).toBe(true)
+
+    await absorbArchiveSnapshot({
+      snapshotId: `current-${suffix}`,
+      collections: [{ id: `current-${suffix}`, title: "Current", active: true, explicitUserSubjects: [`person-${suffix}`], records: [{ id: `current-record-${suffix}`, title: "Current record", active: true, admitted: true, assets: [{ id: `current-asset-${suffix}`, filename: "current.txt", mimeType: "text/plain", sourcePath: currentSource, chunks: [{ id: `current-chunk-${suffix}`, text: "CURRENT-SEARCH" }] }] }] }],
+    })
+
+    expect(await listSharedNamespaces({ subject: `person-${suffix}` })).toEqual([expect.objectContaining({ id: currentNamespace })])
+    expect(await getSharedMaterials(oldNamespace, { subject: `person-${suffix}` })).toBeUndefined()
+    expect(await getSharedAsset(oldNamespace, oldAsset.id, { subject: `person-${suffix}` })).toBeUndefined()
+    expect(insertedRows.map(row => row.content)).toEqual(["CURRENT-SEARCH"])
   })
 })

@@ -19,7 +19,7 @@ export function quizRoutes(app: any) {
     const u = new URL(req.url, "http://localhost");
     const id = u.searchParams.get("quizId");
     if (!id) return ws.close(1008, "quizId required");
-    if (!await getAuthorizedLearningArtifact("quiz", id, req.auth.subject)) {
+    if (!await getAuthorizedLearningArtifact("quiz", id, req.auth.person)) {
       return ws.close(1008, "quiz not found");
     }
 
@@ -92,7 +92,7 @@ export function quizRoutes(app: any) {
   });
 
   app.get("/quiz/:quizId", async (req: any, res: any) => {
-    const artifact = await getAuthorizedLearningArtifact("quiz", req.params.quizId, req.auth.subject);
+    const artifact = await getAuthorizedLearningArtifact("quiz", req.params.quizId, req.auth.person);
     if (!artifact) return res.status(404).send({ error: "not found" });
     res.status(artifact.status === "pending" ? 202 : artifact.status === "failed" ? 500 : 200)
       .send({ ok: artifact.status === "ready", artifact: publicLearningArtifact(artifact) });

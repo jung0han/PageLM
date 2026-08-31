@@ -144,6 +144,14 @@ describe("rag.search personal namespace", () => {
 })
 
 describe("private material public flow", () => {
+  test("does not reuse an answer cache entry across model aliases", async () => {
+    const { askWithContext } = await import("../../lib/ai/ask")
+    const question = `cache alias ${crypto.randomUUID()}`
+    await askWithContext({ question, context: "same source", modelAlias: "pagelm-default" })
+    await askWithContext({ question, context: "same source", modelAlias: "pagelm-fast" })
+    expect(generationOptions.map(options => options.model)).toEqual(["pagelm-default", "pagelm-fast"])
+  })
+
   test("upload, index, retrieve, answer, and authenticated citation complete through HTTP", async () => {
     const subject = `alice-${crypto.randomUUID()}`
     const { createApp } = await import("../app")

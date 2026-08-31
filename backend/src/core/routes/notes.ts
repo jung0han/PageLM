@@ -22,7 +22,7 @@ export function smartnotesRoutes(app: any) {
     const u = new URL(req.url, "http://localhost");
     const id = u.searchParams.get("noteId");
     if (!id) return ws.close(1008, "noteId required");
-    if (!await getAuthorizedLearningArtifact("notes", id, req.auth.subject)) {
+    if (!await getAuthorizedLearningArtifact("notes", id, req.auth.person)) {
       return ws.close(1008, "note not found");
     }
 
@@ -105,14 +105,14 @@ export function smartnotesRoutes(app: any) {
   });
 
   app.get("/smartnotes/:noteId", async (req: any, res: any) => {
-    const artifact = await getAuthorizedLearningArtifact("notes", req.params.noteId, req.auth.subject);
+    const artifact = await getAuthorizedLearningArtifact("notes", req.params.noteId, req.auth.person);
     if (!artifact) return res.status(404).send({ error: "not found" });
     res.status(artifact.status === "pending" ? 202 : artifact.status === "failed" ? 500 : 200)
       .send({ ok: artifact.status === "ready", artifact: publicLearningArtifact(artifact) });
   });
 
   app.get("/smartnotes/:noteId/download", async (req: any, res: any) => {
-    const artifact = await getAuthorizedLearningArtifact("notes", req.params.noteId, req.auth.subject);
+    const artifact = await getAuthorizedLearningArtifact("notes", req.params.noteId, req.auth.person);
     if (!artifact?.file || artifact.status !== "ready") return res.status(404).send({ error: "not found" });
     const filename = path.basename(artifact.file);
     res.setHeader("Content-Type", "application/pdf");

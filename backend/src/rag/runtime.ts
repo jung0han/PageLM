@@ -137,6 +137,16 @@ export async function indexSharedChunks(input: SharedChunkInput) {
   return rows.map(row => row.chunk_id)
 }
 
+/** Remove every shared row for a namespace before replacing its snapshot contents. */
+export async function clearSharedChunks(namespace: string) {
+  if (!/^shared:[A-Za-z0-9._:-]+$/.test(namespace)) throw new Error("invalid shared namespace")
+  await ensureCollection()
+  await milvus().delete({
+    collection_name: config.milvusCollection,
+    filter: `owner_subject == "" && namespace_id == ${quoted(namespace)}`,
+  } as any)
+}
+
 export async function searchPersonalChunks(input: { ownerSubject: string; namespace: string; query: string; limit: number }): Promise<RagHit[]> {
   if (!input.ownerSubject || !isPersonalNamespace(input.namespace) || !input.query.trim()) return []
   await ensureCollection()

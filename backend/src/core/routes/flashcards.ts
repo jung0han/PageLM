@@ -8,9 +8,9 @@ import {
   resolveAssistantTurnOrigin,
 } from '../../learning/artifacts'
 
-async function canReadCard(id: string, ownerSubject: string) {
+async function canReadCard(id: string, principal: any) {
   const artifact = await getLearningArtifact('flashcards', id)
-  return artifact ? !!await getAuthorizedLearningArtifact('flashcards', id, ownerSubject) : true
+  return artifact ? !!await getAuthorizedLearningArtifact('flashcards', id, principal) : true
 }
 
 function publicCard(card: any) {
@@ -48,7 +48,7 @@ export function flashcardRoutes(app: any) {
       const cards = await db.get(`flashcards:${req.auth.subject}`) || []
       const visible: any[] = []
       for (const card of cards) {
-        if (await canReadCard(card.id, req.auth.subject)) visible.push(publicCard(card))
+        if (await canReadCard(card.id, req.auth.person)) visible.push(publicCard(card))
       }
       res.send({ ok: true, flashcards: visible })
     } catch (e: any) {
@@ -58,7 +58,7 @@ export function flashcardRoutes(app: any) {
 
   app.get('/flashcards/:id', async (req: any, res: any) => {
     const card = await db.get(`flashcard:${req.params.id}`) as any
-    if (!card || card.ownerSubject !== req.auth.subject || !await canReadCard(card.id, req.auth.subject)) {
+    if (!card || card.ownerSubject !== req.auth.subject || !await canReadCard(card.id, req.auth.person)) {
       return res.status(404).send({ error: 'not found' })
     }
     res.send({ ok: true, flashcard: publicCard(card) })
@@ -69,7 +69,7 @@ export function flashcardRoutes(app: any) {
       const id = req.params.id
       if (!id) return res.status(400).send({ error: 'id required' })
       const card = await db.get(`flashcard:${id}`)
-      if (!card || card.ownerSubject !== req.auth.subject || !await canReadCard(id, req.auth.subject)) return res.status(404).send({ error: 'not found' })
+      if (!card || card.ownerSubject !== req.auth.subject || !await canReadCard(id, req.auth.person)) return res.status(404).send({ error: 'not found' })
       await db.delete(`flashcard:${id}`)
       let cards = await db.get(`flashcards:${req.auth.subject}`) || []
       cards = cards.filter((c: any) => c.id !== id)

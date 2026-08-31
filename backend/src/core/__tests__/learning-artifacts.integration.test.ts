@@ -48,6 +48,13 @@ vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
         }
         return { error_code: "Success" }
       }
+      async delete(request: any) {
+        const namespace = request.filter.match(/namespace_id == "([^"]+)"/)?.[1]
+        for (let index = milvusRows.length - 1; index >= 0; index--) {
+          if (!namespace || milvusRows[index].namespace_id === namespace) milvusRows.splice(index, 1)
+        }
+        return { error_code: "Success" }
+      }
       async hybridSearch(request: any) {
         if (rejectRetrieval) throw new Error("derived tools must not search shared material")
         const namespaces = request.filter.match(/namespace_id in \[([^\]]+)\]/)?.[1]
@@ -247,13 +254,15 @@ describe("chat-originated learning artifacts", () => {
     fs.writeFileSync(sourcePath, "공유 정책 식별자는 SHARED-741이다.")
 
     const { absorbArchiveSnapshot } = await import("../../shared/snapshot")
-    const snapshot = (subjects: string[], records: any[]) => ({
+    const organization = `org:quality-${suffix}`
+    const snapshot = (subjects: string[], records: any[], organizations: string[] = []) => ({
       snapshotId: `snapshot-${crypto.randomUUID()}`,
       collections: [{
         id: collectionId,
         title: "공유 수업",
         active: true,
         explicitUserSubjects: subjects,
+        organizationSubjects: organizations,
         records,
       }],
     })
@@ -270,11 +279,11 @@ describe("chat-originated learning artifacts", () => {
         chunks: [{ id: `chunk-${suffix}`, text: "공유 정책 식별자는 SHARED-741이다." }],
       }],
     }]
-    await absorbArchiveSnapshot(snapshot([alice], records))
+    await absorbArchiveSnapshot(snapshot([], records, [organization]))
 
     const { createApp } = await import("../app")
     const app = createApp(boundaries({
-      [alice]: { subject: alice, personId: `person-${alice}` },
+      [alice]: { subject: alice, personId: `person-${alice}`, organizationSubjects: [organization] },
       [bob]: { subject: bob, personId: `person-${bob}` },
     }))
     const server = app.listen(0, "127.0.0.1")
@@ -396,7 +405,7 @@ describe("chat-originated learning artifacts", () => {
       expect(await streamOutcome(base, bobCookie, streamPath)).toBe("denied")
     }
 
-    await absorbArchiveSnapshot(snapshot([alice], []))
+    await absorbArchiveSnapshot(snapshot([], records, [organization]))
     expect((await fetch(`${base}/smartnotes/${noteId}`, { headers: { cookie: aliceCookie } })).status).toBe(200)
     expect((await fetch(`${base}/smartnotes/${noteId}`, { headers: { cookie: bobCookie } })).status).toBe(404)
     expect((await fetch(`${base}/smartnotes/${noteId}/download`, { headers: { cookie: aliceCookie } })).status).toBe(200)
@@ -408,7 +417,7 @@ describe("chat-originated learning artifacts", () => {
     const bag = await (await fetch(`${base}/flashcards`, { headers: { cookie: aliceCookie } })).json() as any
     expect(bag.flashcards).toEqual(expect.arrayContaining([expect.objectContaining({ id: flashcard.id })]))
 
-    await absorbArchiveSnapshot(snapshot([], []))
+    await absorbArchiveSnapshot(snapshot([], [], []))
     expect((await fetch(`${base}/smartnotes/${noteId}`, { headers: { cookie: aliceCookie } })).status).toBe(404)
     expect((await fetch(`${base}/smartnotes/${noteId}/download`, { headers: { cookie: aliceCookie } })).status).toBe(404)
     expect((await fetch(`${base}/flashcards/${flashcard.id}`, { headers: { cookie: aliceCookie } })).status).toBe(404)

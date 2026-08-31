@@ -2,7 +2,7 @@ import crypto from "crypto"
 import fs from "fs"
 import path from "path"
 import db from "../utils/database/keyv"
-import { indexSharedChunks } from "../rag/runtime"
+import { clearSharedChunks, indexSharedChunks } from "../rag/runtime"
 import { config } from "../config/env"
 import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from "../rag/vertex"
 
@@ -127,10 +127,38 @@ export async function absorbArchiveSnapshot(input: ArchiveSnapshotInput) {
   let denseVectorsEmbedded = 0
   const index = new Set<string>(((await db.get("shared-namespace:index")) as string[]) || [])
 
+  // Snapshot replacement is authoritative: remove namespaces and their derived
+  // rows that are no longer present before publishing the new index.
+  for (const namespaceId of index) {
+    const namespace = await getSharedNamespace(namespaceId)
+    if (!namespace) continue
+    const stillActive = input.collections.some(collection => collection?.active && `shared:${collection.id}` === namespaceId)
+    if (stillActive) continue
+    await clearSharedChunks(namespaceId)
+    for (const asset of namespace.materials.flatMap(material => material.assets)) {
+      const stored = await db.get(`shared-asset:${namespaceId}:${asset.id}`) as StoredAsset | undefined
+      await db.delete(`shared-asset:${namespaceId}:${asset.id}`)
+      if (stored?.path) await fs.promises.rm(stored.path, { force: true })
+    }
+    await db.delete(`shared-namespace:${namespaceId}`)
+    index.delete(namespaceId)
+  }
+
   for (const collection of input.collections) {
     if (!collection?.active) continue
     const collectionId = requireText(collection.id, "collection.id")
     const namespaceId = `shared:${collectionId}`
+    const previous = await getSharedNamespace(namespaceId)
+    if (previous) {
+      await clearSharedChunks(namespaceId)
+      const nextAssetIds = new Set((collection.records || []).filter(record => record?.active && record?.admitted).flatMap(record => (record.assets || []).map(asset => stableId(namespaceId, requireText(record.id, "record.id"), requireText(asset.id, "asset.id")).slice(0, 48))))
+      for (const asset of previous.materials.flatMap(material => material.assets)) {
+        if (nextAssetIds.has(asset.id)) continue
+        const stored = await db.get(`shared-asset:${namespaceId}:${asset.id}`) as StoredAsset | undefined
+        await db.delete(`shared-asset:${namespaceId}:${asset.id}`)
+        if (stored?.path) await fs.promises.rm(stored.path, { force: true })
+      }
+    }
     const materials: LearningMaterial[] = []
 
     for (const record of collection.records || []) {
