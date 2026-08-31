@@ -147,6 +147,7 @@ export function chatRoutes(app: any) {
             role: "assistant",
             content: answer,
             at: Date.now(),
+            sharedNamespaceIds,
           });
           emitToAll(chatSockets.get(id), { type: "answer", answer });
           emitToAll(chatSockets.get(id), { type: "done" });

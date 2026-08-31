@@ -19,22 +19,36 @@ const log = (...a: any[]) => console.log("[examlab/generate]", new Date().toISOS
 
 type Ctx = {
   examId: string
+  sourceMaterial: string
   spec: ExamSpec | null
   payload: ExamPayload | null
 }
 
 const S = Annotation.Root({
   examId: Annotation<string>(),
+  sourceMaterial: Annotation<string>(),
   spec: Annotation<ExamSpec | null>(),
   payload: Annotation<ExamPayload | null>()
 })
 
 const nLoad = async (s: Ctx) => {
   log("nLoad:start", { examId: s.examId })
-  const spec = loadExam(s.examId)
+  let spec = loadExam(s.examId)
   if (!spec) {
     log("nLoad:error", "exam not found")
     throw new Error("exam not found")
+  }
+  if (s.sourceMaterial) {
+    spec = {
+      ...spec,
+      sections: spec.sections.map(section => ({
+        ...section,
+        gen: section.gen ? {
+          ...section.gen,
+          prompt: `${section.gen.prompt || ""}\n\nUse this existing assistant turn as the study material:\n${s.sourceMaterial}`,
+        } : section.gen,
+      })),
+    }
   }
   log("nLoad:ok", { sections: spec.sections.length })
   return { ...s, spec }
@@ -42,7 +56,7 @@ const nLoad = async (s: Ctx) => {
 
 const nCache = async (s: Ctx) => {
   log("nCache:start")
-  const k = keyOf(s.examId)
+  const k = keyOf(JSON.stringify({ examId: s.examId, sourceMaterial: s.sourceMaterial }))
   const c = readCache(k)
   if (c) {
     log("nCache:hit", { bytes: JSON.stringify(c).length })
@@ -91,7 +105,7 @@ const nValidate = async (s: Ctx) => {
 
 const nSave = async (s: Ctx) => {
   log("nSave:start")
-  const k = keyOf(s.examId)
+  const k = keyOf(JSON.stringify({ examId: s.examId, sourceMaterial: s.sourceMaterial }))
   writeCache(k, s.payload)
   log("nSave:ok", { bytes: JSON.stringify(s.payload).length })
   return s
@@ -114,9 +128,9 @@ edge("save", "__end__")
 
 const compiled = g.compile()
 
-export async function handleExam(examId: string): Promise<ExamPayload> {
+export async function handleExam(examId: string, sourceMaterial = ""): Promise<ExamPayload> {
   log("handleExam:invoke", { examId })
-  const s = await compiled.invoke({ examId, spec: null, payload: null })
+  const s = await compiled.invoke({ examId, sourceMaterial, spec: null, payload: null })
   log("handleExam:done", { sections: s.payload?.sections?.length })
   return s.payload as ExamPayload
 }

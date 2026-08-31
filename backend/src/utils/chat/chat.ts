@@ -2,7 +2,13 @@ import { randomUUID } from "crypto";
 import db from "../database/keyv";
 
 export type ChatMeta = { id: string; title: string; at: number };
-export type ChatMsg = { role: "user" | "assistant"; content: any; at: number };
+export type ChatMsg = {
+  id: string;
+  role: "user" | "assistant";
+  content: any;
+  at: number;
+  sharedNamespaceIds?: string[];
+};
 type StoredChat = ChatMeta & { ownerSubject: string };
 export type PrivateAsset = { id: string; chatId: string; filename: string; mimeType: string; path: string };
 
@@ -22,15 +28,16 @@ export async function getChat(id: string, ownerSubject: string) {
   return chat?.ownerSubject === ownerSubject ? publicChat(chat) : undefined;
 }
 
-export async function addMsg(id: string, ownerSubject: string, m: ChatMsg) {
+export async function addMsg(id: string, ownerSubject: string, m: Omit<ChatMsg, "id"> & { id?: string }) {
   const c = (await db.get(`chat:${id}`)) as StoredChat | undefined;
   if (!c || c.ownerSubject !== ownerSubject) return false;
   const a = ((await db.get(`msgs:${id}`)) as ChatMsg[]) || [];
-  a.push(m);
+  const stored: ChatMsg = { ...m, id: m.id || randomUUID() };
+  a.push(stored);
   await db.set(`msgs:${id}`, a);
   c.at = Date.now();
   await db.set(`chat:${id}`, c);
-  return true;
+  return stored;
 }
 
 export async function listChats(ownerSubject: string, n = 50) {
@@ -47,6 +54,11 @@ export async function getMsgs(id: string, ownerSubject: string) {
   if (!await getChat(id, ownerSubject)) return undefined;
   const a = ((await db.get(`msgs:${id}`)) as ChatMsg[]) || [];
   return a;
+}
+
+export async function getAssistantTurn(chatId: string, ownerSubject: string, turnId: string) {
+  const messages = await getMsgs(chatId, ownerSubject);
+  return messages?.find(message => message.id === turnId && message.role === "assistant");
 }
 
 export async function getSourceBag(id: string, ownerSubject: string) {

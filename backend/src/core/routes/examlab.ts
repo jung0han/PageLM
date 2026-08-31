@@ -3,6 +3,15 @@ import { emitToAll, emitLarge } from "../../utils/chat/ws"
 import { withTimeout } from "../../utils/quiz/promise"
 import { handleExam } from "../../services/examlab/generate"
 import { loadAllExams } from "../../services/examlab/loader"
+import type { ExamPayload } from "../../services/examlab/types"
+import {
+  completeLearningArtifact,
+  createLearningArtifact,
+  failLearningArtifact,
+  getAuthorizedLearningArtifact,
+  publicLearningArtifact,
+  resolveAssistantTurnOrigin,
+} from "../../learning/artifacts"
 
 const streams = new Map<string, Set<any>>()
 const log = (...a: any) => console.log("[exam]", ...a)
@@ -12,10 +21,13 @@ function okSpec(x: any) {
 }
 
 export function examRoutes(app: any) {
-  app.ws("/ws/exams", (ws: any, req: any) => {
+  app.ws("/ws/exams", async (ws: any, req: any) => {
     const u = new URL(req.url, "http://localhost")
     const runId = u.searchParams.get("runId")
     if (!runId) return ws.close(1008, "runId required")
+    if (!await getAuthorizedLearningArtifact("examlab", runId, req.auth.subject)) {
+      return ws.close(1008, "exam not found")
+    }
 
     let s = streams.get(runId)
     if (!s) { s = new Set(); streams.set(runId, s) }
@@ -61,19 +73,26 @@ export function examRoutes(app: any) {
     try {
       const examId = String(req.body?.examId || "").trim()
       if (!examId) return res.status(400).send({ ok: false, error: "examId required" })
+      const origin = await resolveAssistantTurnOrigin(req.body, req.auth.subject)
+      if ((req.body?.chatId || req.body?.assistantTurnId) && !origin) {
+        return res.status(404).send({ error: "not found" })
+      }
 
       const runId = crypto.randomUUID()
+      await createLearningArtifact(runId, "examlab", req.auth.subject, origin)
       res.status(202).send({ ok: true, runId, stream: `/ws/exams?runId=${runId}` })
 
       setImmediate(async () => {
         const s = streams.get(runId)
         try {
           emitToAll(s, { type: "phase", value: "generating", examId })
-          const payload = await withTimeout(handleExam(examId), 180000, "handleExam")
+          const payload = await withTimeout(handleExam(examId, origin?.material), 180000, "handleExam")
+          await completeLearningArtifact("examlab", runId, { output: payload })
           await emitLarge(s, "exam", { examId, payload }, { id: runId, chunkBytes: 128 * 1024, gzip: false })
           emitToAll(s, { type: "done" })
           log("single done", runId, examId)
         } catch (e: any) {
+          await failLearningArtifact("examlab", runId, e)
           log("single err", runId, e?.message || e)
           emitToAll(s, { type: "error", examId, error: e?.message || "failed" })
         }
@@ -84,15 +103,24 @@ export function examRoutes(app: any) {
     }
   })
 
-  app.post("/exams", async (_req: any, res: any) => {
+  app.get("/exam/:runId", async (req: any, res: any) => {
+    const artifact = await getAuthorizedLearningArtifact("examlab", req.params.runId, req.auth.subject)
+    if (!artifact) return res.status(404).send({ error: "not found" })
+    res.status(artifact.status === "pending" ? 202 : artifact.status === "failed" ? 500 : 200)
+      .send({ ok: artifact.status === "ready", artifact: publicLearningArtifact(artifact) })
+  })
+
+  app.post("/exams", async (req: any, res: any) => {
     try {
       const runId = crypto.randomUUID()
+      await createLearningArtifact(runId, "examlab", req.auth.subject)
       res.status(202).send({ ok: true, runId, stream: `/ws/exams?runId=${runId}` })
 
       setImmediate(async () => {
         const s = streams.get(runId)
         try {
           const all = loadAllExams().filter(okSpec)
+          const outputs: ExamPayload[] = []
           if (!all.length) {
             emitToAll(s, { type: "error", error: "no exams found" })
             return
@@ -102,6 +130,7 @@ export function examRoutes(app: any) {
             try {
               emitToAll(s, { type: "phase", value: "generating", examId: ex.id })
               const payload = await withTimeout(handleExam(ex.id), 180000, `handleExam:${ex.id}`)
+              outputs.push(payload)
               await emitLarge(s, "exam", { examId: ex.id, payload }, { id: runId, chunkBytes: 128 * 1024, gzip: false })
             } catch (e: any) {
               log("batch item err", ex.id, e?.message || e)
@@ -109,8 +138,10 @@ export function examRoutes(app: any) {
             }
           }
           emitToAll(s, { type: "done" })
+          await completeLearningArtifact("examlab", runId, { output: outputs })
           log("batch done", runId)
         } catch (e: any) {
+          await failLearningArtifact("examlab", runId, e)
           log("batch err", runId, e?.message || e)
           emitToAll(s, { type: "error", error: e?.message || "failed" })
         }
