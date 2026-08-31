@@ -25,7 +25,7 @@ export function examRoutes(app: any) {
     const u = new URL(req.url, "http://localhost")
     const runId = u.searchParams.get("runId")
     if (!runId) return ws.close(1008, "runId required")
-    if (!await getAuthorizedLearningArtifact("examlab", runId, req.auth.subject)) {
+    if (!await getAuthorizedLearningArtifact("examlab", runId, req.auth.person)) {
       return ws.close(1008, "exam not found")
     }
 
@@ -104,7 +104,7 @@ export function examRoutes(app: any) {
   })
 
   app.get("/exam/:runId", async (req: any, res: any) => {
-    const artifact = await getAuthorizedLearningArtifact("examlab", req.params.runId, req.auth.subject)
+    const artifact = await getAuthorizedLearningArtifact("examlab", req.params.runId, req.auth.person)
     if (!artifact) return res.status(404).send({ error: "not found" })
     res.status(artifact.status === "pending" ? 202 : artifact.status === "failed" ? 500 : 200)
       .send({ ok: artifact.status === "ready", artifact: publicLearningArtifact(artifact) })

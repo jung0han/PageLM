@@ -42,7 +42,7 @@ export function podcastRoutes(app: any) {
     if (!pid) {
       return ws.close(1008, "pid required")
     }
-    if (!await getAuthorizedLearningArtifact("podcast", pid, req.auth.subject)) {
+    if (!await getAuthorizedLearningArtifact("podcast", pid, req.auth.person)) {
       return ws.close(1008, "podcast not found")
     }
     
@@ -129,7 +129,7 @@ export function podcastRoutes(app: any) {
   })
 
   app.get("/podcast/:pid", async (req: any, res: any) => {
-    const artifact = await getAuthorizedLearningArtifact("podcast", req.params.pid, req.auth.subject)
+    const artifact = await getAuthorizedLearningArtifact("podcast", req.params.pid, req.auth.person)
     if (!artifact) return res.status(404).send({ error: "not found" })
     res.status(artifact.status === "pending" ? 202 : artifact.status === "failed" ? 500 : 200)
       .send({ ok: artifact.status === "ready", artifact: publicLearningArtifact(artifact) })
@@ -138,7 +138,7 @@ export function podcastRoutes(app: any) {
   app.get("/podcast/download/:pid/:filename", async (req: any, res: any, next: any) => {
     try {
       const { pid, filename } = req.params
-      const artifact = await getAuthorizedLearningArtifact("podcast", pid, req.auth.subject)
+      const artifact = await getAuthorizedLearningArtifact("podcast", pid, req.auth.person)
       if (!artifact?.file || artifact.status !== "ready") return res.status(404).send({ error: "not found" })
       if (path.basename(artifact.file).toLowerCase() !== filename.toLowerCase()) {
         return res.status(404).send({ error: "not found" })

@@ -1,6 +1,6 @@
 import db from "../utils/database/keyv"
 import { getAssistantTurn } from "../utils/chat/chat"
-import { canAccessSharedNamespace } from "../shared/snapshot"
+import { canAccessSharedNamespace, type SharedNamespacePrincipal } from "../shared/snapshot"
 
 export type LearningArtifactKind = "notes" | "flashcards" | "quiz" | "examlab" | "debate" | "podcast"
 export type LearningArtifactStatus = "pending" | "ready" | "failed"
@@ -89,11 +89,11 @@ export async function getLearningArtifact(kind: LearningArtifactKind, id: string
   return await db.get(`learning-artifact:${kind}:${id}`) as LearningArtifact | undefined
 }
 
-export async function getAuthorizedLearningArtifact(kind: LearningArtifactKind, id: string, ownerSubject: string) {
+export async function getAuthorizedLearningArtifact(kind: LearningArtifactKind, id: string, principal: SharedNamespacePrincipal) {
   const artifact = await getLearningArtifact(kind, id)
-  if (!artifact || artifact.ownerSubject !== ownerSubject) return undefined
+  if (!artifact || artifact.ownerSubject !== principal.subject) return undefined
   for (const namespaceId of artifact.origin?.sharedNamespaceIds || []) {
-    if (!await canAccessSharedNamespace(namespaceId, ownerSubject)) return undefined
+    if (!await canAccessSharedNamespace(namespaceId, principal)) return undefined
   }
   return artifact
 }

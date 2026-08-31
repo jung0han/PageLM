@@ -1,7 +1,7 @@
 import fs from "fs"
 import path from "path"
 import crypto from "crypto"
-import { generationForAlias } from "../../utils/llm/llm"
+import { generationForAlias, resolveModelAlias } from "../../utils/llm/llm"
 import { execDirect } from "../../agents/runtime"
 import { normalizeTopic } from "../../utils/text/normalize"
 
@@ -285,8 +285,9 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
   const systemPrompt = opts.systemPrompt?.trim() || BASE_SYSTEM_PROMPT
   const historyArr = Array.isArray(opts.history) ? opts.history : undefined
   const historyCache = serializeHistoryForCache(historyArr)
+  const modelAlias = resolveModelAlias(opts.modelAlias)
 
-  const ck = { t: opts.cacheScope || "ask_ctx", q: safeQ, ctx, topic, sys: systemPrompt, hist: historyCache }
+  const ck = { t: opts.cacheScope || "ask_ctx", q: safeQ, ctx, topic, sys: systemPrompt, hist: historyCache, modelAlias }
   const cached = readCache(ck)
   if (cached) return cached
 
@@ -298,7 +299,7 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
     content: `Context:\n${ctx}\n\nQuestion:\n${safeQ}\n\nTopic:\n${topic}\n\nReturn only the JSON object.`
   })
 
-  const res = await generationForAlias(opts.modelAlias).call(messages as any)
+  const res = await generationForAlias(modelAlias).call(messages as any)
   const draft = toText(res).trim()
   const jsonStr = extractFirstJsonObject(draft) || draft
   const parsed = tryParse<any>(jsonStr)

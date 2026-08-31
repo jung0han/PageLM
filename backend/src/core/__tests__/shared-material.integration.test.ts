@@ -50,6 +50,13 @@ vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
         }
         return { error_code: "Success" }
       }
+      async delete(request: any) {
+        const namespace = request.filter.match(/namespace_id == "([^"]+)"/)?.[1]
+        for (let index = milvusRows.length - 1; index >= 0; index--) {
+          if (!namespace || milvusRows[index].namespace_id === namespace) milvusRows.splice(index, 1)
+        }
+        return { error_code: "Success" }
+      }
       async hybridSearch(request: any) {
         const owner = request.filter.match(/owner_subject == "([^"]*)"/)?.[1]
         const namespaces = request.filter.match(/namespace_id in \[([^\]]+)\]/)?.[1]
