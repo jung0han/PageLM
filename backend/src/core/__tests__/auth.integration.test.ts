@@ -1,9 +1,22 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import WebSocket from "ws"
 import type { ActiveQaiPerson, AuthentikOidc, QaiPersonResolver } from "../../auth/types"
 
 process.env.OPENAI_API_KEY ||= "integration-test"
 process.env.OPENAI_BASE_URL ||= "http://127.0.0.1:1/v1"
+
+vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+    MilvusClient: class {
+      async hasCollection() { return { value: true } }
+      async loadCollection() { return { error_code: "Success" } }
+      async hybridSearch() { return { results: [] } }
+      async insert() { return { error_code: "Success" } }
+    },
+  }
+})
 
 type Identity = ActiveQaiPerson | null
 
