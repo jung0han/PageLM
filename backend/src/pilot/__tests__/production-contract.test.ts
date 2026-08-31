@@ -14,6 +14,8 @@ describe('production deployment contract', () => {
     expect(compose).toContain('PAGELM_FRONTEND_IMAGE:?')
     expect(release).toContain("PAGELM_RELEASE_SHA")
     expect(release).toContain("'^[0-9a-fA-F]{40}$'")
+    expect(compose.match(/pagelm\.release-revision:/g)).toHaveLength(2)
+    expect(compose.match(/pagelm\.owner: workops-pagelm/g)).toHaveLength(2)
   })
 
   test('keeps secrets in the mode-0600 production env file', () => {
