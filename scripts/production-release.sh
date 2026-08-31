@@ -25,6 +25,19 @@ printf '%s' "$PAGELM_FRONTEND_IMAGE" | grep -Eq '@sha256:[0-9a-fA-F]{64}$' || fa
 printf '%s' "$PAGELM_BACKEND_IMAGE" | grep -Fq ":$PAGELM_RELEASE_SHA@" || fail "backend image tag must carry the release SHA"
 printf '%s' "$PAGELM_FRONTEND_IMAGE" | grep -Fq ":$PAGELM_RELEASE_SHA@" || fail "frontend image tag must carry the release SHA"
 
+verify_image_provenance() {
+  image=$1
+  name=$2
+  # Pull and inspect the exact digest reference. Docker output is discarded;
+  # only the label equality is retained as a safe admission fact.
+  docker pull "$image" >/dev/null 2>&1 || fail "$name image pull failed"
+  revision=$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null) || fail "$name image inspect failed"
+  [ "$revision" = "$PAGELM_RELEASE_SHA" ] || fail "$name image OCI revision does not match release SHA"
+}
+
+verify_image_provenance "$PAGELM_BACKEND_IMAGE" backend
+verify_image_provenance "$PAGELM_FRONTEND_IMAGE" frontend
+
 compose() {
   if [ -n "${TRAEFIK_OVERRIDE:-}" ]; then
     docker compose --env-file "$ENV_FILE" --project-name "$PROJECT" --file "$COMPOSE_FILE" --file "$TRAEFIK_OVERRIDE" "$@"

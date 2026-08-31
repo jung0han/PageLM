@@ -193,7 +193,23 @@ export function chatRoutes(app: any) {
     if (!chat) {
       return res.status(404).send({ error: "not found" });
     }
-    const messages = await getMsgs(id, req.auth.subject);
+    const storedMessages = await getMsgs(id, req.auth.subject);
+    // Assistant answers may contain citations into shared namespaces. Recheck
+    // every recorded namespace at read time so revocation cannot expose the
+    // answer or its citation metadata from chat history.
+    const messages = [];
+    for (const message of storedMessages || []) {
+      if (message.role === "assistant" && message.sharedNamespaceIds?.length) {
+        const allowed = await Promise.all(message.sharedNamespaceIds.map(namespaceId =>
+          canAccessSharedNamespace(namespaceId, {
+            subject: req.auth.subject,
+            organizationSubjects: req.auth.person.organizationSubjects,
+          }),
+        ));
+        if (allowed.some(value => !value)) continue;
+      }
+      messages.push(message);
+    }
     res.send({ ok: true, chat, messages });
   });
 

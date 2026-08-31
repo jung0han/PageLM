@@ -59,7 +59,7 @@ describe('production deployment contract', () => {
     fs.mkdirSync(bin)
     fs.writeFileSync(
       path.join(bin, 'docker'),
-      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PAGELM_DOCKER_LOG"\ncase " $* " in *" up -d --wait "*) exit 17;; esac\nexit 0\n',
+      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PAGELM_DOCKER_LOG"\ncase " $* " in *" image inspect "*) printf "%s\\n" "$PAGELM_RELEASE_SHA";; *" up -d --wait "*) exit 17;; esac\nexit 0\n',
       { mode: 0o755 },
     )
     fs.writeFileSync(
@@ -87,5 +87,20 @@ describe('production deployment contract', () => {
     } finally {
       fs.rmSync(fixture, { recursive: true, force: true })
     }
+  })
+
+  test('rejects an image whose OCI revision differs from the release SHA', () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pagelm-provenance-'))
+    const bin = path.join(fixture, 'bin')
+    const envFile = path.join(fixture, 'production.env')
+    fs.mkdirSync(bin)
+    fs.writeFileSync(path.join(bin, 'docker'), '#!/bin/sh\ncase " $* " in *" image inspect "*) printf wrong-revision;; esac\n', { mode: 0o755 })
+    const sha = '475affba0bb52f1b144482248f6b3e644b7c31b6'
+    fs.writeFileSync(envFile, `PAGELM_RELEASE_SHA=${sha}\nPAGELM_BACKEND_IMAGE=registry.invalid/backend:${sha}@sha256:${'a'.repeat(64)}\nPAGELM_FRONTEND_IMAGE=registry.invalid/frontend:${sha}@sha256:${'b'.repeat(64)}\n`, { mode: 0o600 })
+    try {
+      const result = spawnSync('/bin/sh', [path.join(root, 'scripts/production-release.sh'), 'status'], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, PAGELM_ENV_FILE: envFile }, encoding: 'utf8' })
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('OCI revision does not match')
+    } finally { fs.rmSync(fixture, { recursive: true, force: true }) }
   })
 })

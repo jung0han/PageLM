@@ -419,5 +419,14 @@ describe("shared namespace public flow", () => {
     expect(afterOrgRevocation.answer).toContain("PARENT-100")
     expect(afterOrgRevocation.answer).not.toContain("ORG-200")
     expect(afterOrgRevocation.answer).not.toContain("MIXED-400")
+
+    const historyAfterRevocation = await (await fetch(`${base}/chats/${chatId}`, { headers: { cookie: aliceCookie } })).json() as any
+    expect(historyAfterRevocation.messages.some((message: any) =>
+      message.role === "assistant" && message.sharedNamespaceIds?.includes(ns("org-child"))
+    )).toBe(false)
+    expect(historyAfterRevocation.messages.some((message: any) =>
+      message.role === "assistant" && message.content?.citations?.some((citation: any) => citation.filename === "org-child.txt")
+    )).toBe(false)
+    expect((await fetch(`${base}/chats/${chatId}`, { headers: { cookie: bobCookie } })).status).toBe(404)
   })
 })
