@@ -12,6 +12,7 @@ const persistenceFile = option("--persistence-file")
 const fixture = path.resolve(new URL("./fixtures/candidate-sentinel.txt", import.meta.url).pathname)
 const sentinel = fs.readFileSync(fixture, "utf8").trim().split(/\s+/)[0]
 const transcript = []
+let sessionCookie = ""
 
 function record(step, details) {
   transcript.push({ step, ...details })
@@ -19,12 +20,30 @@ function record(step, details) {
 }
 
 async function request(url, init = {}) {
-  const response = await fetch(url, init)
+  const headers = new Headers(init.headers || {})
+  if (sessionCookie) headers.set("cookie", sessionCookie)
+  const response = await fetch(url, { ...init, headers })
   const text = await response.text()
   let body
   try { body = JSON.parse(text) } catch { body = text }
   if (!response.ok) throw new Error(`${init.method || "GET"} ${url} -> ${response.status}: ${text}`)
   return body
+}
+
+async function login() {
+  const begin = await fetch(`${backend}/auth/login`, { redirect: "manual" })
+  if (begin.status !== 302) throw new Error(`Login did not redirect: ${begin.status}`)
+  const provider = await fetch(begin.headers.get("location"), { redirect: "manual" })
+  if (provider.status !== 302) throw new Error(`Authentik stub did not redirect: ${provider.status}`)
+  const callback = await fetch(provider.headers.get("location"), {
+    headers: { cookie: begin.headers.get("set-cookie")?.split(";", 1)[0] || "" },
+    redirect: "manual",
+  })
+  if (callback.status !== 302) throw new Error(`OIDC callback failed: ${callback.status}`)
+  sessionCookie = callback.headers.get("set-cookie")?.split(";", 1)[0] || ""
+  if (!sessionCookie) throw new Error("OIDC callback omitted the opaque session cookie")
+  const me = await request(`${backend}/auth/me`)
+  record("authentication", { personId: me.person?.id, opaqueCookie: true })
 }
 
 async function pollAssistant(chatId, requiredText) {
@@ -55,6 +74,8 @@ record("health", { live, ready })
 const front = await fetch(`${frontend}/`)
 if (!front.ok || !(await front.text()).includes("<div id=\"root\"></div>")) throw new Error("Frontend root did not load")
 record("frontend", { status: front.status })
+
+await login()
 
 const chatQuestion = `candidate-chat-${crypto.randomUUID()}`
 const chat = await request(`${backend}/chat`, {

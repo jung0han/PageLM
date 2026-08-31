@@ -6,19 +6,25 @@ import {
   addMsg,
   listChats,
   getMsgs,
+  getSourceBag,
+  setSourceBag,
 } from "../../utils/chat/chat";
 import { emitToAll } from "../../utils/chat/ws";
+import fs from "fs";
 
 type UpFile = { path: string; filename: string; mimeType: string };
 
 const chatSockets = new Map<string, Set<any>>();
 
 export function chatRoutes(app: any) {
-  app.ws("/ws/chat", (ws: any, req: any) => {
+  app.ws("/ws/chat", async (ws: any, req: any) => {
     const url = new URL(req.url, "http://localhost");
     const chatId = url.searchParams.get("chatId");
     if (!chatId) {
       return ws.close(1008, "chatId required");
+    }
+    if (!await getChat(chatId, req.auth.subject)) {
+      return ws.close(1008, "chat not found");
     }
 
     let set = chatSockets.get(chatId);
@@ -48,7 +54,7 @@ export function chatRoutes(app: any) {
 
       if (isMp) {
         const tMp = Date.now();
-        const { q: mq, chatId: mcid, files: mf } = await parseMultipart(req);
+        const { q: mq, chatId: mcid, files: mf } = await parseMultipart(req, req.auth.subject);
         q = mq;
         chatId = mcid;
         files = mf || [];
@@ -60,8 +66,12 @@ export function chatRoutes(app: any) {
         if (!q) return res.status(400).send({ error: "q required" });
       }
 
-      let chat = chatId ? await getChat(chatId) : undefined;
-      if (!chat) chat = await mkChat(q);
+      let chat = chatId ? await getChat(chatId, req.auth.subject) : undefined;
+      if (chatId && !chat) {
+        for (const file of files) await fs.promises.unlink(file.path).catch(() => undefined);
+        return res.status(404).send({ error: "not found" });
+      }
+      if (!chat) chat = await mkChat(q, req.auth.subject);
       const id = chat.id;
       const ns = `chat:${id}`;
 
@@ -96,7 +106,7 @@ export function chatRoutes(app: any) {
           }
 
           const tUser = Date.now();
-          await addMsg(id, { role: "user", content: q, at: Date.now() });
+          await addMsg(id, req.auth.subject, { role: "user", content: q, at: Date.now() });
           emitToAll(chatSockets.get(id), {
             type: "phase",
             value: "generating",
@@ -104,7 +114,7 @@ export function chatRoutes(app: any) {
 
           let answer: any = "";
 
-          const msgHistory = await getMsgs(id);
+          const msgHistory = await getMsgs(id, req.auth.subject) || [];
           const relevantHistory = msgHistory.slice(-20);
 
           answer = await handleAsk({
@@ -113,7 +123,7 @@ export function chatRoutes(app: any) {
             history: relevantHistory,
           });
 
-          await addMsg(id, {
+          await addMsg(id, req.auth.subject, {
             role: "assistant",
             content: answer,
             at: Date.now(),
@@ -135,20 +145,36 @@ export function chatRoutes(app: any) {
     }
   });
 
-  app.get("/chats", async (_: any, res: any) => {
+  app.get("/chats", async (req: any, res: any) => {
     const t = Date.now();
-    const chats = await listChats();
+    const chats = await listChats(req.auth.subject);
     res.send({ ok: true, chats });
   });
 
   app.get("/chats/:id", async (req: any, res: any) => {
     const t = Date.now();
     const id = req.params.id;
-    const chat = await getChat(id);
+    const chat = await getChat(id, req.auth.subject);
     if (!chat) {
       return res.status(404).send({ error: "not found" });
     }
-    const messages = await getMsgs(id);
+    const messages = await getMsgs(id, req.auth.subject);
     res.send({ ok: true, chat, messages });
+  });
+
+  app.get("/chats/:id/source-bag", async (req: any, res: any) => {
+    const namespaceIds = await getSourceBag(req.params.id, req.auth.subject);
+    if (!namespaceIds) return res.status(404).send({ error: "not found" });
+    res.send({ ok: true, namespaceIds });
+  });
+
+  app.put("/chats/:id/source-bag", async (req: any, res: any) => {
+    const namespaceIds = req.body?.namespaceIds;
+    if (!Array.isArray(namespaceIds) || namespaceIds.some((id: unknown) => typeof id !== "string" || !id)) {
+      return res.status(400).send({ error: "namespaceIds must be an array of IDs" });
+    }
+    const saved = await setSourceBag(req.params.id, req.auth.subject, [...new Set(namespaceIds)] as string[]);
+    if (!saved) return res.status(404).send({ error: "not found" });
+    res.send({ ok: true, namespaceIds: saved });
   });
 }

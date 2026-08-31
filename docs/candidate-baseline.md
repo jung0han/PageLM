@@ -1,6 +1,6 @@
 # Reproducible candidate baseline
 
-This baseline proves the pinned PageLM fork can build and exercise chat, personal upload, and the global Learning Bag without production Archive content or routes. It binds only to loopback (`127.0.0.1:15000` and `127.0.0.1:15173`), uses a project-scoped volume, and defaults to a deterministic local OpenAI-compatible stub. It does not configure ingress, DNS, TLS, Archive calls, or `archive.qai.lge.com`.
+This baseline proves the pinned PageLM fork can build and exercise opaque-cookie authentication, chat, personal upload, and the global Learning Bag without production Archive content or routes. It binds only to loopback (`127.0.0.1:14010`, `127.0.0.1:15000`, and `127.0.0.1:15173`), uses a project-scoped volume, and defaults to deterministic local Authentik, QAI-person, and OpenAI-compatible stubs. It does not configure ingress, DNS, TLS, Archive calls, or `archive.qai.lge.com`.
 
 ## Reproduce
 

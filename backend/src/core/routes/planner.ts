@@ -26,7 +26,7 @@ export function plannerRoutes(app: any) {
             const isMultipart = ct.includes("multipart/form-data")
 
             if (isMultipart) {
-                const { q: text, files } = await parseMultipart(req)
+                const { q: text, files } = await parseMultipart(req, req.auth.subject)
                 const request: CreateTaskRequest = { text, files }
                 const task = await plannerService.createTaskFromRequest(request)
                 res.send({ ok: true, task })
@@ -203,7 +203,7 @@ export function plannerRoutes(app: any) {
                 return res.status(400).send({ ok: false, error: "multipart/form-data required" })
             }
 
-            const { files } = await parseMultipart(req)
+            const { files } = await parseMultipart(req, req.auth.subject)
             if (!files || files.length === 0) {
                 return res.status(400).send({ ok: false, error: "no files uploaded" })
             }

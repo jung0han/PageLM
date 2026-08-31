@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { createHash, randomUUID } from 'crypto'
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse'
 import Busboy from 'busboy'
@@ -13,7 +14,7 @@ if (!fs.existsSync(str)) fs.mkdirSync(str, { recursive: true })
 
 export type UpFile = { path: string; filename: string; mimeType: string }
 
-export function parseMultipart(req: any): Promise<{ q: string; chatId?: string; files: UpFile[] }> {
+export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: string; chatId?: string; files: UpFile[] }> {
   return new Promise((resolve, reject) => {
     const bb = Busboy({ headers: req.headers })
     let q = ''
@@ -29,7 +30,9 @@ export function parseMultipart(req: any): Promise<{ q: string; chatId?: string; 
       pending++
       const filename = info?.filename || 'file'
       const mimeType = info?.mimeType || info?.mime || 'application/octet-stream'
-      const fp = path.join(str, `${Date.now()}-${filename}`)
+      const ownerDir = path.join(str, createHash('sha256').update(ownerSubject).digest('hex'))
+      fs.mkdirSync(ownerDir, { recursive: true })
+      const fp = path.join(ownerDir, `${randomUUID()}-${path.basename(filename)}`)
       const ws = fs.createWriteStream(fp)
       file.on('error', e => { failed = true; reject(e) })
       ws.on('error', e => { failed = true; reject(e) })
