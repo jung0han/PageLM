@@ -49,3 +49,18 @@ git grep -nE '(sk-[A-Za-z0-9]{20,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY)'
 Image inspection must show `org.opencontainers.image.revision`, `org.opencontainers.image.source`, and `io.qai.pagelm.upstream-revision`. Health readiness proves writable storage and SQLite access only; it intentionally makes no provider or Archive request. The Compose config passes provider values only to the backend, and no `.env` file is copied or mounted.
 
 Deployment to owner-private infrastructure remains blocked until a candidate host, registry, deploy controller, certificate, and recovery owner are explicitly selected. Production route switching is outside this baseline.
+
+## Fixture-backed Archive replacement pilot evidence
+
+DONGWOO-1119 adds a local-only, repeatable evidence boundary. It validates the checked-in non-sensitive parent-plus-two-child snapshot fixture, current active/admitted projection, exact embedding identity reuse policy, BM25/namespace/grant rebuild evidence, private asset counts, authorization exposure matrix, fixed Korean/English/identifier top-10 questions, all chat-centred learning flows, Archive runtime isolation, same-image redeploy integrity, and fixture prior-route recovery.
+
+```bash
+evidence_file="$(mktemp)"
+npm run --silent pilot:evidence -- \
+  --fixture scripts/fixtures/archive-pilot.json \
+  --evidence "$evidence_file"
+```
+
+The command accepts fixtures only from `scripts/fixtures`, writes one versioned secret-free JSON object to stdout and atomically to the absolute evidence path, and has no Archive URL, SSH, ingress, DNS, TLS, or production-route capability. A passing fixture run reports `candidate_result: passed` and `go_no_go: no-go` together. The production conclusion remains no-go because a real non-sensitive Archive snapshot owning interface, an owner-private PageLM candidate target, and the exact prior-route recovery owner are unresolved. No real Archive/private service or `archive.qai.lge.com` route is contacted or changed by this command.
+
+Shared snapshot rows now use deterministic chunk IDs and Milvus upsert, so absorbing the same snapshot after a retained-volume redeploy does not duplicate search rows. Dense vectors are reused only when model `gemini-embedding-001`, dimension 1536, configured `VERTEX_EMBEDDING_VERSION`, snapshot version, and vector length all match exactly; otherwise PageLM re-embeds the chunk.

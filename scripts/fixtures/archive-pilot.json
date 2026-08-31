@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "mode": "fixture-candidate",
+  "productionRouteChanged": false,
+  "candidateEmbedding": {
+    "model": "gemini-embedding-001",
+    "dimensions": 1536,
+    "version": "pilot-v1"
+  },
+  "observedMigration": {
+    "recordIds": ["pilot-parent-policy", "pilot-parent-guide", "pilot-org-record", "pilot-mixed-record"],
+    "namespaces": 3,
+    "materials": 4,
+    "assets": 4,
+    "searchRows": 4,
+    "grants": 4,
+    "privateAssetsCopied": 4,
+    "bm25Rebuilt": true,
+    "namespacesRebuilt": true,
+    "grantsRebuilt": true
+  },
+  "authorizationProbes": [
+    { "surface": "picker", "role": "explicit-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "search", "role": "explicit-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "asset", "role": "explicit-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "citation", "role": "explicit-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "picker", "role": "organization-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "search", "role": "organization-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "asset", "role": "organization-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "citation", "role": "organization-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": true, "observedAllowed": true },
+    { "surface": "picker", "role": "denied-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "search", "role": "denied-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "asset", "role": "denied-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "citation", "role": "denied-user", "namespaceId": "shared:pilot-parent", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "picker", "role": "cross-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "search", "role": "cross-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "asset", "role": "cross-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": false, "observedAllowed": false },
+    { "surface": "citation", "role": "cross-user", "namespaceId": "shared:pilot-org-child", "expectedAllowed": false, "observedAllowed": false }
+  ],
+  "retrievalQuestions": [
+    { "id": "ko-01", "locale": "ko", "query": "파일럿 정책 식별자는?", "topK": 10, "expectedAssetId": "pilot-parent-policy-file", "observedAssetIds": ["pilot-parent-policy-file"] },
+    { "id": "ko-02", "locale": "ko", "query": "한국어 안내 식별자는?", "topK": 10, "expectedAssetId": "pilot-parent-guide-file", "observedAssetIds": ["pilot-parent-guide-file"] },
+    { "id": "ko-03", "locale": "ko", "query": "조직 품질 기준을 찾아줘", "topK": 10, "expectedAssetId": "pilot-org-file", "observedAssetIds": ["pilot-org-file"] },
+    { "id": "ko-04", "locale": "ko", "query": "혼합 권한 기준은?", "topK": 10, "expectedAssetId": "pilot-mixed-file", "observedAssetIds": ["pilot-mixed-file"] },
+    { "id": "en-01", "locale": "en", "query": "What is the pilot policy identifier?", "topK": 10, "expectedAssetId": "pilot-parent-policy-file", "observedAssetIds": ["pilot-parent-policy-file"] },
+    { "id": "en-02", "locale": "en", "query": "Find the organization pilot rule", "topK": 10, "expectedAssetId": "pilot-org-file", "observedAssetIds": ["pilot-org-file"] },
+    { "id": "en-03", "locale": "en", "query": "Find the unavailable decoy", "topK": 10, "expectedAssetId": "pilot-parent-guide-file", "observedAssetIds": ["pilot-org-file"] },
+    { "id": "id-01", "locale": "identifier", "query": "PILOT-PARENT-100", "topK": 10, "expectedAssetId": "pilot-parent-policy-file", "observedAssetIds": ["pilot-parent-policy-file"] },
+    { "id": "id-02", "locale": "identifier", "query": "PILOT-GUIDE-200", "topK": 10, "expectedAssetId": "pilot-parent-guide-file", "observedAssetIds": ["pilot-parent-guide-file"] },
+    { "id": "id-03", "locale": "identifier", "query": "PILOT-MIXED-400", "topK": 10, "expectedAssetId": "pilot-mixed-file", "observedAssetIds": ["pilot-mixed-file"] }
+  ],
+  "learningFlows": {
+    "chat": true,
+    "sourceBag": true,
+    "flashcard": true,
+    "note": true,
+    "quiz": true,
+    "examlab": true,
+    "debate": true,
+    "podcast": true,
+    "citation": true,
+    "download": true,
+    "websocketStreams": true
+  },
+  "isolation": {
+    "archiveContentRuntimeCalls": 0,
+    "unexpectedEgressCalls": 0,
+    "permanentSync": false,
+    "dualWrite": false
+  },
+  "rehearsal": {
+    "cleanBuild": true,
+    "sameImageRedeploy": true,
+    "duplicateRowsAfterRedeploy": 0,
+    "statePreserved": true,
+    "priorRouteRestored": true,
+    "candidateRemoved": true
+  },
+  "snapshot": {
+    "snapshotId": "candidate-pilot-1119",
+    "collections": [
+      {
+        "id": "pilot-parent",
+        "title": "Pilot 품질 기준",
+        "active": true,
+        "explicitUserSubjects": ["fixture-alice"],
+        "organizationSubjects": [],
+        "records": [
+          {
+            "id": "pilot-parent-policy",
+            "title": "Pilot 정책",
+            "active": true,
+            "admitted": true,
+            "assets": [
+              {
+                "id": "pilot-parent-policy-file",
+                "filename": "archive-shared.txt",
+                "mimeType": "text/plain",
+                "sourcePath": "archive-shared.txt",
+                "chunks": [{
+                  "id": "pilot-parent-policy-chunk",
+                  "text": "Pilot policy identifier is PILOT-PARENT-100.",
+                  "denseVectorDimensions": 1536,
+                  "embedding": { "model": "gemini-embedding-001", "dimensions": 1536, "version": "pilot-v1" }
+                }]
+              }
+            ]
+          },
+          {
+            "id": "pilot-parent-guide",
+            "title": "Pilot 안내서",
+            "dataSourceId": "archive-datasource-pilot",
+            "active": true,
+            "admitted": true,
+            "assets": [
+              {
+                "id": "pilot-parent-guide-file",
+                "filename": "archive-pilot-parent-guide.txt",
+                "mimeType": "text/plain",
+                "sourcePath": "archive-pilot-parent-guide.txt",
+                "chunks": [{
+                  "id": "pilot-parent-guide-chunk",
+                  "text": "한국어 파일럿 안내 식별자는 PILOT-GUIDE-200이다.",
+                  "denseVectorDimensions": 1536,
+                  "embedding": { "model": "gemini-embedding-001", "dimensions": 1536, "version": "pilot-v1" }
+                }]
+              }
+            ]
+          },
+          {
+            "id": "pilot-old-revision",
+            "title": "이전 revision",
+            "active": false,
+            "admitted": true,
+            "assets": [{ "id": "old", "filename": "old.txt", "sourcePath": "archive-shared.txt", "chunks": [{ "id": "old", "text": "OLD-REVISION" }] }]
+          },
+          {
+            "id": "pilot-processing",
+            "title": "미승인 processing 자료",
+            "active": true,
+            "admitted": false,
+            "assets": [{ "id": "processing", "filename": "processing.txt", "sourcePath": "archive-shared.txt", "chunks": [{ "id": "processing", "text": "PROCESSING-HISTORY" }] }]
+          }
+        ]
+      },
+      {
+        "id": "pilot-org-child",
+        "title": "Pilot 조직 기준",
+        "parentId": "pilot-parent",
+        "active": true,
+        "explicitUserSubjects": [],
+        "organizationSubjects": ["org:quality"],
+        "records": [
+          {
+            "id": "pilot-org-record",
+            "title": "조직 품질 기준",
+            "active": true,
+            "admitted": true,
+            "assets": [
+              {
+                "id": "pilot-org-file",
+                "filename": "archive-shared-child.txt",
+                "mimeType": "text/plain",
+                "sourcePath": "archive-shared-child.txt",
+                "chunks": [{
+                  "id": "pilot-org-chunk",
+                  "text": "Organization pilot identifier is PILOT-ORG-300.",
+                  "denseVectorDimensions": 1536,
+                  "embedding": { "model": "gemini-embedding-001", "dimensions": 1536, "version": "legacy-v0" }
+                }]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "pilot-mixed-child",
+        "title": "Pilot 혼합 기준",
+        "parentId": "pilot-parent",
+        "active": true,
+        "explicitUserSubjects": ["fixture-bob"],
+        "organizationSubjects": ["org:lab"],
+        "records": [
+          {
+            "id": "pilot-mixed-record",
+            "title": "혼합 권한 기준",
+            "active": true,
+            "admitted": true,
+            "assets": [
+              {
+                "id": "pilot-mixed-file",
+                "filename": "archive-pilot-mixed.txt",
+                "mimeType": "text/plain",
+                "sourcePath": "archive-pilot-mixed.txt",
+                "chunks": [{
+                  "id": "pilot-mixed-chunk",
+                  "text": "혼합 권한 식별자는 PILOT-MIXED-400이다.",
+                  "denseVectorDimensions": 1536,
+                  "embedding": { "model": "text-embedding-004", "dimensions": 1536, "version": "pilot-v1" }
+                }]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "pilot-deleted-child",
+        "title": "삭제된 자료실",
+        "parentId": "pilot-parent",
+        "active": false,
+        "explicitUserSubjects": ["fixture-alice"],
+        "organizationSubjects": [],
+        "records": []
+      }
+    ]
+  }
+}

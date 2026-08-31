@@ -9,6 +9,7 @@ export const config = {
   vertexLocation: process.env.VERTEX_LOCATION || 'asia-northeast3',
   vertexApiEndpoint: process.env.VERTEX_API_ENDPOINT || '',
   vertexAccessToken: process.env.VERTEX_ACCESS_TOKEN || '',
+  vertexEmbeddingVersion: process.env.VERTEX_EMBEDDING_VERSION || '',
   milvusAddress: process.env.MILVUS_ADDRESS || 'milvus:19530',
   milvusToken: process.env.MILVUS_TOKEN || '',
   milvusDatabase: process.env.MILVUS_DATABASE || 'default',

@@ -42,6 +42,14 @@ vi.mock("@zilliz/milvus2-sdk-node", async importOriginal => {
       async createCollection() { collectionExists = true; return { error_code: "Success" } }
       async loadCollection() { return { error_code: "Success" } }
       async insert(request: any) { milvusRows.push(...request.data); return { error_code: "Success" } }
+      async upsert(request: any) {
+        for (const row of request.data) {
+          const index = milvusRows.findIndex(existing => existing.chunk_id === row.chunk_id)
+          if (index === -1) milvusRows.push(row)
+          else milvusRows[index] = row
+        }
+        return { error_code: "Success" }
+      }
       async hybridSearch(request: any) {
         const owner = request.filter.match(/owner_subject == "([^"]*)"/)?.[1]
         const namespaces = request.filter.match(/namespace_id in \[([^\]]+)\]/)?.[1]
@@ -181,7 +189,18 @@ describe("shared namespace public flow", () => {
         },
       ],
     })
-    expect(report).toEqual({ snapshotId: `snapshot-${suffix}`, namespaces: 1, materials: 1, assets: 1, searchRows: 1 })
+    expect(report).toEqual({
+      snapshotId: `snapshot-${suffix}`,
+      namespaces: 1,
+      materials: 1,
+      assets: 1,
+      searchRows: 1,
+      grantRows: 1,
+      denseVectorsReused: 0,
+      denseVectorsEmbedded: 1,
+      bm25Rebuilt: true,
+      privateAssetsCopied: 1,
+    })
 
     // From this point onward the Archive-side snapshot source no longer exists.
     fs.rmSync(sourceDir, { recursive: true, force: true })
