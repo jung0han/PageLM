@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-PageLM%20Community%20License-blueviolet.svg" alt="License: PageLM Community License"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D21.18.0-brightgreen.svg" alt="Node.js Version"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-22.16.0-brightgreen.svg" alt="Node.js Version"></a>
   <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18+-blue.svg" alt="React"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg" alt="TypeScript"></a>
   <a href="https://discord.gg/P7HaRayqTh"><img alt="Discord" src="https://img.shields.io/discord/1379682804849180844?label=Discord%20server"></a>
@@ -113,8 +113,7 @@ The platform provides a modern interface for students, educators, and researcher
 
 ### Prerequisites
 
-- Node.js v21.18+
-- npm or pnpm
+- Node.js v22.16.0, npm v10.9.2, and pnpm v10.13.1 (via Corepack)
 - ffmpeg (required for podcast audio)
 - Docker (optional)
 
@@ -134,26 +133,22 @@ cd pagelm
   ./setup.ps1
 
 # Manual (Both Linux/Windows):
-  # Install dependencies
-  cd backend
-  npm install
-  cd ../frontend
-  npm install
+  # Install dependencies from the locked root/backend and frontend manifests
+  npm ci --legacy-peer-deps
+  corepack enable
+  corepack prepare pnpm@10.13.1 --activate
+  cd frontend && pnpm install --frozen-lockfile && cd ..
 
   # Setup environment
-  cd ..
-  npm i -g nodemon
   cp .env.example .env
   # Make sure to configure API keys and settings in .env
 
   # Run these two commands in separate terminals but inside the project directory.
   # Run backend
-  cd backend
   npm run dev
 
   # Run frontend
-  cd frontend
-  npm run dev
+  cd frontend && pnpm dev
 ```
 
 👉 Access at: **http://localhost:5173**
@@ -164,11 +159,11 @@ cd pagelm
 # Development
 docker compose up --build
 
-# Production
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Isolated candidate baseline (loopback only; see docs/candidate-baseline.md)
+FORK_REVISION=$(git rev-parse HEAD) docker compose -p qai-pagelm-candidate -f compose.candidate.yaml up -d --build --wait
 ```
 
-- Frontend: http://localhost:5173 (dev) / http://localhost:8080 (prod)
+- Frontend: http://localhost:5173 (development), http://127.0.0.1:15173 (candidate)
 - Backend: http://localhost:5000
 
 ---

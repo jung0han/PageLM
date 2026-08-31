@@ -24,18 +24,18 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: '21.x'
+        node-version: 22.16.0
     
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 8
+        version: 10.13.1
     
     - name: Install backend dependencies
-      run: npm install
+      run: npm ci --legacy-peer-deps
     
     - name: Install frontend dependencies
-      run: pnpm install
+      run: pnpm install --frozen-lockfile
       working-directory: ./frontend
     
     - name: Run backend security audit
@@ -87,12 +87,12 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: '21.x'
+        node-version: 22.16.0
     
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 8
+        version: 10.13.1
     
     - name: Check for backend updates
       run: |

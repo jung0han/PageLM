@@ -2,18 +2,22 @@
   "name": "pagelm",
   "scripts": {
     "dev": "nodemon",
-    "build": "tsc -p backend/tsconfig.json",
+    "clean": "node -e \"require('fs').rmSync('backend/dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p backend/tsconfig.json",
     "start": "node backend/dist/src/core/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "candidate:smoke": "node scripts/candidate-smoke.mjs"
   },
   "authors": [
     "nullure (https://github.com/nullure)",
     "recabasic (https://github.com/recabasic)"
   ],
   "engines": {
-    "node": ">=21.18.0"
+    "node": "22.16.0",
+    "npm": "10.9.2"
   },
+  "packageManager": "npm@10.9.2",
   "dependencies": {
     "@google-cloud/speech": "^7.2.0",
     "@google-cloud/text-to-speech": "^6.3.0",

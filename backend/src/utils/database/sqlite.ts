@@ -1,4 +1,5 @@
 import sqlite3 from 'sqlite3'
+import fs from 'fs'
 import path from 'path'
 
 class SQLiteDatabase {
@@ -46,4 +47,5 @@ class SQLiteDatabase {
 }
 
 const dbPath = path.join(process.cwd(), 'storage', 'database.sqlite')
+fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 export const sqlite = new SQLiteDatabase(dbPath)
