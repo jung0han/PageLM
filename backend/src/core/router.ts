@@ -9,9 +9,11 @@ import { plannerRoutes } from "./routes/planner";
 import { debateRoutes } from "./routes/debate";
 import { companionRoutes } from "./routes/companion";
 import { healthRoutes } from "./routes/health";
+import { sharedNamespaceRoutes } from "./routes/shared";
 
 export function registerRoutes(app: any) {
   healthRoutes(app);
+  sharedNamespaceRoutes(app);
   chatRoutes(app);
   quizRoutes(app);
   examRoutes(app);

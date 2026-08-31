@@ -10,6 +10,7 @@ import {
   setSourceBag,
   getPrivateAsset,
 } from "../../utils/chat/chat";
+import { canAccessSharedNamespace } from "../../shared/snapshot";
 import { emitToAll } from "../../utils/chat/ws";
 import fs from "fs";
 import { allowedModelAliases, resolveModelAlias } from "../../utils/llm/llm";
@@ -131,6 +132,7 @@ export function chatRoutes(app: any) {
 
           const msgHistory = await getMsgs(id, req.auth.subject) || [];
           const relevantHistory = msgHistory.slice(-20);
+          const sharedNamespaceIds = await getSourceBag(id, req.auth.subject) || [];
 
           answer = await handleAsk({
             q,
@@ -138,6 +140,7 @@ export function chatRoutes(app: any) {
             history: relevantHistory,
             ownerSubject: req.auth.subject,
             modelAlias,
+            sharedNamespaceIds,
           });
 
           await addMsg(id, req.auth.subject, {
@@ -202,6 +205,11 @@ export function chatRoutes(app: any) {
     const namespaceIds = req.body?.namespaceIds;
     if (!Array.isArray(namespaceIds) || namespaceIds.some((id: unknown) => typeof id !== "string" || !id)) {
       return res.status(400).send({ error: "namespaceIds must be an array of IDs" });
+    }
+    for (const namespaceId of namespaceIds) {
+      if (!await canAccessSharedNamespace(namespaceId, req.auth.subject)) {
+        return res.status(404).send({ error: "not found" });
+      }
     }
     const saved = await setSourceBag(req.params.id, req.auth.subject, [...new Set(namespaceIds)] as string[]);
     if (!saved) return res.status(404).send({ error: "not found" });

@@ -166,10 +166,10 @@ describe("stable-sub personal learning state", () => {
     const { chatId } = await createdChat.json() as { chatId: string }
 
     const sourceBag = await fetch(`${base}/chats/${chatId}/source-bag`, json("PUT", alice, {
-      namespaceIds: ["shared:alpha"],
+      namespaceIds: [],
     }))
     expect(sourceBag.status).toBe(200)
-    expect(await sourceBag.json()).toEqual({ ok: true, namespaceIds: ["shared:alpha"] })
+    expect(await sourceBag.json()).toEqual({ ok: true, namespaceIds: [] })
 
     const card = await fetch(`${base}/flashcards`, json("POST", alice, {
       question: `private-${suffix}`,

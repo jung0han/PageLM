@@ -317,16 +317,17 @@ export async function askWithContext(opts: AskWithContextOptions): Promise<AskPa
 }
 
 export async function handleAsk(
-  q: string | { q: string; namespace?: string; history?: any[]; ownerSubject?: string; modelAlias?: string },
+  q: string | { q: string; namespace?: string; history?: any[]; ownerSubject?: string; modelAlias?: string; sharedNamespaceIds?: string[] },
   ns?: string,
   k = 6,
   historyArg?: any[],
   ownerSubjectArg?: string,
-  modelAliasArg?: string
+  modelAliasArg?: string,
+  sharedNamespaceIdsArg?: string[]
 ): Promise<AskPayload> {
   if (typeof q === "object" && q !== null) {
     const params = q
-    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg, params.ownerSubject ?? ownerSubjectArg, params.modelAlias ?? modelAliasArg)
+    return handleAsk(params.q, params.namespace ?? ns, k, params.history ?? historyArg, params.ownerSubject ?? ownerSubjectArg, params.modelAlias ?? modelAliasArg, params.sharedNamespaceIds ?? sharedNamespaceIdsArg)
   }
 
   const questionRaw = typeof q === "string" ? q : String(q ?? "")
@@ -336,7 +337,7 @@ export async function handleAsk(
   const rag = await execDirect({
     agent: "researcher",
     plan: { steps: [{ tool: "rag.search", input: { q: safeQ, ns: nsFinal, k }, timeoutMs: 8000, retries: 1 }] },
-    ctx: { ns: nsFinal, ownerSubject: ownerSubjectArg }
+    ctx: { ns: nsFinal, ownerSubject: ownerSubjectArg, sharedNamespaceIds: sharedNamespaceIdsArg }
   })
 
   const ctxDocs = Array.isArray(rag.result) ? (rag.result as Array<{ text?: string; meta?: any }>) : []
@@ -352,13 +353,14 @@ export async function handleAsk(
     cacheScope: `ans:${nsFinal}`,
     modelAlias: modelAliasArg,
   })
-  const chatId = nsFinal.startsWith("chat:") ? nsFinal.slice(5) : ""
   const citations = [...new Map(ctxDocs
-    .filter(doc => doc?.meta?.assetId && doc?.meta?.chunkId && chatId)
+    .filter(doc => doc?.meta?.assetId && doc?.meta?.chunkId)
     .map(doc => [doc.meta.chunkId, {
       chunkId: String(doc.meta.chunkId),
       filename: String(doc.meta.filename || "source"),
-      url: `/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(doc.meta.assetId)}`,
+      url: doc.meta.namespaceId?.startsWith("shared:")
+        ? `/shared-namespaces/${encodeURIComponent(doc.meta.namespaceId)}/assets/${encodeURIComponent(doc.meta.assetId)}`
+        : `/chats/${encodeURIComponent(nsFinal.slice(5))}/assets/${encodeURIComponent(doc.meta.assetId)}`,
     }])).values()] as AskCitation[]
   return citations.length ? { ...generated, citations } : generated
 }

@@ -13,6 +13,7 @@ export const config = {
   milvusToken: process.env.MILVUS_TOKEN || '',
   milvusDatabase: process.env.MILVUS_DATABASE || 'default',
   milvusCollection: process.env.MILVUS_COLLECTION || 'pagelm_chunks',
+  archiveSnapshotFile: process.env.ARCHIVE_SNAPSHOT_FILE || '',
   litellmBaseUrl: process.env.LITELLM_BASE_URL || 'https://proxy.qai.lge.com/v1',
   litellmApiKey: process.env.LITELLM_API_KEY || '',
   litellmDefaultModelAlias: process.env.LITELLM_DEFAULT_MODEL_ALIAS || 'pagelm-default',

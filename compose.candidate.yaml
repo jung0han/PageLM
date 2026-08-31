@@ -40,6 +40,7 @@ services:
       VERTEX_ACCESS_TOKEN: ${CANDIDATE_VERTEX_ACCESS_TOKEN:-candidate-local-stub}
       MILVUS_ADDRESS: milvus:19530
       MILVUS_COLLECTION: pagelm_chunks
+      ARCHIVE_SNAPSHOT_FILE: /candidate/archive-snapshot.json
       AUTHENTIK_AUTHORIZATION_URL: http://127.0.0.1:14010/oidc/authorize
       AUTHENTIK_TOKEN_URL: http://mock-openai:4010/oidc/token
       AUTHENTIK_USERINFO_URL: http://mock-openai:4010/oidc/userinfo
@@ -51,6 +52,7 @@ services:
       QAI_PERSON_RESOLVER_TOKEN: ${CANDIDATE_QAI_RESOLVER_TOKEN:-candidate-local-stub}
     volumes:
       - pagelm-storage:/app/storage
+      - ./scripts/fixtures:/candidate:ro
     ports:
       - "127.0.0.1:15000:5000"
     depends_on:

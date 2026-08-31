@@ -19,7 +19,14 @@ export type PersonalChunkInput = {
 
 export type RagHit = {
   text: string
-  meta: { chunkId: string; assetId: string; filename: string; score: number }
+  meta: { chunkId: string; assetId: string; filename: string; score: number; namespaceId?: string }
+}
+
+export type SharedChunkInput = {
+  namespace: string
+  assetId: string
+  filename: string
+  chunks: Array<{ sourceId: string; text: string }>
 }
 
 let client: MilvusClient | undefined
@@ -104,6 +111,26 @@ export async function indexPersonalChunks(input: PersonalChunkInput) {
   return rows.map(row => row.chunk_id)
 }
 
+export async function indexSharedChunks(input: SharedChunkInput) {
+  if (!/^shared:[A-Za-z0-9._:-]+$/.test(input.namespace)) throw new Error("invalid shared namespace")
+  await ensureCollection()
+  const rows: Array<Record<string, any>> = []
+  for (const chunk of input.chunks) {
+    if (!chunk.text.trim()) continue
+    rows.push({
+      chunk_id: randomUUID(),
+      owner_subject: "",
+      namespace_id: input.namespace,
+      asset_id: input.assetId,
+      filename: input.filename,
+      content: chunk.text,
+      dense_vector: await embedWithVertex(chunk.text, "RETRIEVAL_DOCUMENT"),
+    })
+  }
+  if (rows.length) await milvus().insert({ collection_name: config.milvusCollection, data: rows })
+  return rows.map(row => row.chunk_id)
+}
+
 export async function searchPersonalChunks(input: { ownerSubject: string; namespace: string; query: string; limit: number }): Promise<RagHit[]> {
   if (!input.ownerSubject || !isPersonalNamespace(input.namespace) || !input.query.trim()) return []
   await ensureCollection()
@@ -127,6 +154,36 @@ export async function searchPersonalChunks(input: { ownerSubject: string; namesp
       assetId: String(row.asset_id || ""),
       filename: String(row.filename || ""),
       score: Number(row.score || 0),
+      namespaceId: input.namespace,
+    },
+  }))
+}
+
+export async function searchSharedChunks(input: { namespaceIds: string[]; query: string; limit: number }): Promise<RagHit[]> {
+  const namespaceIds = [...new Set(input.namespaceIds.filter(namespace => /^shared:[A-Za-z0-9._:-]+$/.test(namespace)))]
+  if (!namespaceIds.length || !input.query.trim()) return []
+  await ensureCollection()
+  const dense = await embedWithVertex(input.query, "RETRIEVAL_QUERY")
+  const response = await milvus().hybridSearch({
+    collection_name: config.milvusCollection,
+    filter: `owner_subject == "" && namespace_id in [${namespaceIds.map(quoted).join(", ")}]`,
+    data: [
+      { anns_field: "dense_vector", data: dense, metric_type: MetricType.COSINE, params: { ef: 64 } },
+      { anns_field: "bm25_vector", data: input.query, metric_type: MetricType.BM25, params: {} },
+    ],
+    rerank: RRFRanker(60),
+    limit: input.limit,
+    output_fields: ["chunk_id", "content", "filename", "asset_id", "namespace_id"],
+    consistency_level: "Strong" as any,
+  } as any)
+  return (response.results || []).map((row: any) => ({
+    text: String(row.content || ""),
+    meta: {
+      chunkId: String(row.chunk_id || row.id || ""),
+      assetId: String(row.asset_id || ""),
+      filename: String(row.filename || ""),
+      score: Number(row.score || 0),
+      namespaceId: String(row.namespace_id || ""),
     },
   }))
 }

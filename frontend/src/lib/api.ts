@@ -7,6 +7,14 @@ export type ChatsList = { ok: true; chats: ChatInfo[] };
 export type ChatDetail = { ok: true; chat: ChatInfo; messages: ChatMessage[] };
 export type ChatJSONBody = { q: string; chatId?: string; model?: string };
 export type ModelAliases = { ok: true; defaultAlias: string; aliases: string[] };
+export type SharedNamespaceSummary = { id: string; title: string; description: string; parentId: string | null };
+export type LearningMaterial = {
+  id: string;
+  title: string;
+  description: string;
+  provenance: { archiveCollectionId: string; archiveRecordId: string };
+  assets: Array<{ id: string; filename: string; mimeType: string; chunks: Array<{ id: string; text: string }> }>;
+};
 export type ChatPhase = "upload_start" | "upload_done" | "generating";
 export type FlashCard = { q: string; a: string; tags?: string[] };
 export type Question = { id: number; question: string; options: string[]; correct: number; hint: string; explanation: string; imageHtml?: string; };
@@ -250,6 +258,26 @@ export function getChats() {
 
 export function getChatDetail(id: string) {
   return req<ChatDetail>(`${env.backend}/chats/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function getSharedNamespaces() {
+  return req<{ ok: true; namespaces: SharedNamespaceSummary[] }>(`${env.backend}/shared-namespaces`, { method: "GET" });
+}
+
+export function getSharedMaterials(namespaceId: string) {
+  return req<{ ok: true; materials: LearningMaterial[] }>(`${env.backend}/shared-namespaces/${encodeURIComponent(namespaceId)}/materials`, { method: "GET" });
+}
+
+export function getSourceBag(chatId: string) {
+  return req<{ ok: true; namespaceIds: string[] }>(`${env.backend}/chats/${encodeURIComponent(chatId)}/source-bag`, { method: "GET" });
+}
+
+export function setSourceBag(chatId: string, namespaceIds: string[]) {
+  return req<{ ok: true; namespaceIds: string[] }>(`${env.backend}/chats/${encodeURIComponent(chatId)}/source-bag`, {
+    method: "PUT",
+    headers: jsonHeaders({}),
+    body: JSON.stringify({ namespaceIds }),
+  });
 }
 
 export async function createFlashcard(input: {
