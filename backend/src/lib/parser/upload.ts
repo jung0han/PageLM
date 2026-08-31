@@ -4,28 +4,27 @@ import { createHash, randomUUID } from 'crypto'
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse'
 import Busboy from 'busboy'
-import { marked } from 'marked'
 import { embedTextFromFile } from '../ai/embed'
-import { OllamaEmbeddings } from '@langchain/ollama'
-import { OpenAIEmbeddings } from '@langchain/openai'
+import { savePrivateAsset } from '../../utils/chat/chat'
 
 const str = path.join(process.cwd(), 'storage', 'uploads')
 if (!fs.existsSync(str)) fs.mkdirSync(str, { recursive: true })
 
 export type UpFile = { path: string; filename: string; mimeType: string }
 
-export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: string; chatId?: string; files: UpFile[] }> {
+export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: string; chatId?: string; model?: string; files: UpFile[] }> {
   return new Promise((resolve, reject) => {
     const bb = Busboy({ headers: req.headers })
     let q = ''
     let chatId = ''
+    let model = ''
     const files: UpFile[] = []
     let pending = 0
     let ended = false
     let failed = false
-    const done = () => { if (!failed && ended && pending === 0) resolve({ q, chatId: chatId || undefined, files }) }
+    const done = () => { if (!failed && ended && pending === 0) resolve({ q, chatId: chatId || undefined, model: model || undefined, files }) }
 
-    bb.on('field', (n, v) => { if (n === 'q') q = v; if (n === 'chatId') chatId = v })
+    bb.on('field', (n, v) => { if (n === 'q') q = v; if (n === 'chatId') chatId = v; if (n === 'model') model = v })
     bb.on('file', (_n, file, info: any) => {
       pending++
       const filename = info?.filename || 'file'
@@ -45,20 +44,24 @@ export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: str
   })
 }
 
-export async function handleUpload(a: { filePath: string; filename?: string; contentType?: string; namespace?: string }): Promise<{ stored: string }> {
+export async function handleUpload(a: {
+  filePath: string
+  filename: string
+  contentType?: string
+  namespace: string
+  chatId: string
+  ownerSubject: string
+}): Promise<{ stored: string; assetId: string }> {
   const fp = a.filePath
   const mime = a.contentType || ''
-  const ns = a.namespace || 'pagelm'
   const txt = await extractText(fp, mime)
   if (!txt?.trim()) throw new Error('No valid content extracted from file.')
   const out = `${fp}.txt`
   fs.writeFileSync(out, txt)
-  const isO = process.env.LLM_PROVIDER === 'ollama'
-  const _emb = isO
-    ? new OllamaEmbeddings({ model: process.env.OLLAMA_MODEL || 'llama3' })
-    : new OpenAIEmbeddings({ model: 'text-embedding-3-small', openAIApiKey: process.env.OPENROUTER_API_KEY, configuration: { baseURL: 'https://openrouter.ai/api/v1' } })
-  await embedTextFromFile(out, ns)
-  return { stored: out }
+  const assetId = randomUUID()
+  await embedTextFromFile({ filePath: out, namespace: a.namespace, ownerSubject: a.ownerSubject, assetId, filename: a.filename })
+  await savePrivateAsset({ id: assetId, chatId: a.chatId, filename: a.filename, mimeType: mime, path: fp }, a.ownerSubject)
+  return { stored: out, assetId }
 }
 
 async function extractText(filePath: string, mime: string) {
@@ -68,7 +71,7 @@ async function extractText(filePath: string, mime: string) {
     return data.text
   }
   if (mime.includes('markdown')) {
-    return marked.parse(raw.toString())
+    return raw.toString()
   }
   if (mime.includes('plain')) {
     return raw.toString()

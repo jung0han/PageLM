@@ -93,8 +93,14 @@ const form = new FormData()
 form.set("q", `Repeat the unique identifier ${sentinel} from the uploaded context.`)
 form.set("file", new Blob([fs.readFileSync(fixture)], { type: "text/plain" }), path.basename(fixture))
 const upload = await request(`${backend}/chat`, { method: "POST", body: form })
-await pollAssistant(upload.chatId, sentinel)
-record("personal-upload", { chatId: upload.chatId, sentinel })
+const uploadResult = await pollAssistant(upload.chatId, sentinel)
+const citation = uploadResult.assistant.content.citations?.[0]
+if (!citation?.url) throw new Error("Personal upload answer omitted an authenticated citation")
+const unauthenticatedCitation = await fetch(`${backend}${citation.url}`)
+if (unauthenticatedCitation.status !== 401) throw new Error(`Citation was readable without a session: ${unauthenticatedCitation.status}`)
+const citedAsset = await request(`${backend}${citation.url}`)
+if (!String(citedAsset).includes(sentinel)) throw new Error("Authenticated citation did not return the uploaded asset")
+record("personal-upload", { chatId: upload.chatId, sentinel, authenticatedCitation: true })
 
 const cardPayload = {
   question: `candidate-card-${crypto.randomUUID()}`,

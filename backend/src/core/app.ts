@@ -7,7 +7,6 @@ import { authRoutes } from "../auth/routes"
 import { config } from "../config/env"
 import { registerRoutes } from "./router"
 import { authenticationMiddleware, loggerMiddleware, websocketAuthentication } from "./middleware"
-import { createHash } from "crypto"
 
 export type AppOptions = {
   auth?: AuthService
@@ -36,14 +35,6 @@ export function createApp(options: AppOptions = {}) {
   app.options("*", cors({ origin: config.frontendUrl, credentials: true }))
   app.use(authenticationMiddleware(auth))
   app.useWs(websocketAuthentication(auth))
-  app.use((req: any, res: any, next: Function) => {
-    if (!req.path.startsWith("/storage/uploads/")) return next()
-    const owner = createHash("sha256").update(req.auth.subject).digest("hex")
-    if (!req.path.startsWith(`/storage/uploads/${owner}/`)) return res.status(404).send({ error: "not found" })
-    next()
-  })
-  app.use(app.serverStatic("/storage", "./storage"))
-
   authRoutes(app, auth)
   registerRoutes(app)
   return app
