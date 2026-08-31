@@ -382,13 +382,13 @@ describe("shared namespace public flow", () => {
 
     await absorbArchiveSnapshot({
       snapshotId: `later-${suffix}`,
-      collections: [collection({
-        id: "future-child",
-        title: "나중 자식",
-        text: "FUTURE-600",
-        parentId: "parent",
-        organizations: [`org:quality-${suffix}`],
-      })],
+      collections: [
+        collection({ id: "parent", title: "상위 자료실", text: "PARENT-100", users: [alice] }),
+        collection({ id: "org-child", title: "조직 자료실", text: "ORG-200", parentId: "parent", organizations: [`org:quality-${suffix}`] }),
+        collection({ id: "hidden-child", title: "비공개 자식", text: "HIDDEN-300", parentId: "parent", users: [carol] }),
+        collection({ id: "mixed-grandchild", title: "혼합 자료실", text: "MIXED-400", parentId: "org-child", users: [bob], organizations: [`org:quality-${suffix}`] }),
+        collection({ id: "future-child", title: "나중 자식", text: "FUTURE-600", parentId: "parent", organizations: [`org:quality-${suffix}`] }),
+      ],
     })
     const storedBag = await (await fetch(`${base}/chats/${chatId}/source-bag`, { headers: { cookie: aliceCookie } })).json() as any
     expect(storedBag.namespaceIds).toEqual([ns("parent"), ns("org-child"), ns("mixed-grandchild")])
