@@ -1,0 +1,67 @@
+name: qai-pagelm-candidate
+
+services:
+  mock-openai:
+    image: node:22.16.0-alpine@sha256:41e4389f3d988d2ed55392df4db1420ad048ae53324a8e2b7c6d19508288107e
+    command: ["node", "/candidate/mock-openai.mjs"]
+    volumes:
+      - ./scripts/mock-openai.mjs:/candidate/mock-openai.mjs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4010/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 6
+    restart: unless-stopped
+
+  backend:
+    image: ${CANDIDATE_BACKEND_IMAGE:-qai-pagelm-backend:candidate}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+      args:
+        FORK_REVISION: ${FORK_REVISION:-development}
+        UPSTREAM_REVISION: b3b4895fb3a180088b897705816a5a9786d79a92
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5000
+      VITE_BACKEND_URL: http://127.0.0.1:15000
+      VITE_FRONTEND_URL: http://127.0.0.1:15173
+      db_mode: json
+      LLM_PROVIDER: openai
+      EMB_PROVIDER: openai
+      OPENAI_API_KEY: ${CANDIDATE_OPENAI_API_KEY:-candidate-local-stub}
+      OPENAI_EMBED_API_KEY: ${CANDIDATE_OPENAI_EMBED_API_KEY:-candidate-local-stub}
+      OPENAI_BASE_URL: ${CANDIDATE_OPENAI_BASE_URL:-http://mock-openai:4010/v1}
+      OPENAI_EMBED_BASE_URL: ${CANDIDATE_OPENAI_EMBED_BASE_URL:-http://mock-openai:4010/v1}
+      OPENAI_MODEL: ${CANDIDATE_OPENAI_MODEL:-candidate-chat}
+      OPENAI_EMBED_MODEL: ${CANDIDATE_OPENAI_EMBED_MODEL:-candidate-embedding}
+    volumes:
+      - pagelm-storage:/app/storage
+    ports:
+      - "127.0.0.1:15000:5000"
+    depends_on:
+      mock-openai:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ${CANDIDATE_FRONTEND_IMAGE:-qai-pagelm-frontend:candidate}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        FORK_REVISION: ${FORK_REVISION:-development}
+        UPSTREAM_REVISION: b3b4895fb3a180088b897705816a5a9786d79a92
+        VITE_BACKEND_URL: http://127.0.0.1:15000
+        VITE_TIMEOUT: 90000
+    ports:
+      - "127.0.0.1:15173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pagelm-storage:

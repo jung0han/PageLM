@@ -1,6 +1,6 @@
-import path from 'path'
+import { loadLocalEnv } from './load-env'
 
-process.loadEnvFile(path.resolve(process.cwd(), '.env'))
+loadLocalEnv()
 
 export const config = {
   db_mode: process.env.db_mode || 'json',
