@@ -12,6 +12,8 @@ describe('production deployment contract', () => {
   test('uses digest-pinned release images and the full source SHA', () => {
     expect(compose).toContain('PAGELM_BACKEND_IMAGE:?')
     expect(compose).toContain('PAGELM_FRONTEND_IMAGE:?')
+    expect(compose).toContain('GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/pagelm-gcloud.json')
+    expect(compose).toContain('application_default_credentials.json}:/run/secrets/pagelm-gcloud.json:ro')
     expect(release).toContain("PAGELM_RELEASE_SHA")
     expect(release).toContain("'^[0-9a-fA-F]{40}$'")
     expect(compose.match(/pagelm\.release-revision:/g)).toHaveLength(2)
@@ -24,7 +26,16 @@ describe('production deployment contract', () => {
     expect(compose).toContain('MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?')
     expect(compose).toContain('MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?')
     expect(release).toContain('secret env file must have mode 0600')
+    expect(release).toContain('org.opencontainers.image.revision')
     expect(release).not.toMatch(/docker compose config/)
+  })
+
+  test('ships the secret-safe production smoke entrypoint', () => {
+    const smoke = fs.readFileSync(path.join(root, 'scripts/production-smoke.mjs'), 'utf8')
+    expect(smoke).toContain('--origin')
+    expect(smoke).toContain('mode 0600')
+    expect(smoke).toContain('cookie: "redacted"')
+    expect(smoke).not.toContain('console.log(cookie)')
   })
 
   test('does not publish ports or use fixed container names', () => {
