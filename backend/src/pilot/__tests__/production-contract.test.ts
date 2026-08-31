@@ -15,8 +15,10 @@ describe('production deployment contract', () => {
   })
 
   test('keeps secrets in the mode-0600 production env file', () => {
-    expect(compose).toContain('/srv/secrets/pagelm/production.env')
+    expect(compose).toContain('${PAGELM_ENV_FILE:-/srv/secrets/pagelm/production.env}')
     expect(compose).not.toMatch(/MINIO_ROOT_PASSWORD:\s+minioadmin/)
+    expect(compose).toContain('MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?')
+    expect(compose).toContain('MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?')
     expect(release).toContain('secret env file must have mode 0600')
     expect(release).not.toMatch(/docker compose config/)
   })
@@ -24,9 +26,14 @@ describe('production deployment contract', () => {
   test('does not publish ports or use fixed container names', () => {
     expect(compose).not.toMatch(/^\s+ports:/m)
     expect(compose).not.toMatch(/^\s+container_name:/m)
-    expect(compose).toContain('traefik-public:')
-    expect(compose).toContain('pagelm-frontend')
-    expect(compose).toContain('pagelm-backend')
+    expect(compose).not.toContain('traefik-public:')
+    expect(compose).toContain('proxy-net:')
+    expect(compose).toContain('backend-v2')
+    const ingress = fs.readFileSync(path.join(root, 'compose.production.traefik.yaml'), 'utf8')
+    expect(ingress).toContain('traefik-public:')
+    expect(ingress).toContain('pagelm-frontend')
+    expect(ingress).toContain('pagelm-backend')
+    expect(ingress).not.toContain('archive.qai.lge.com')
   })
 
   test('exposes controlled lifecycle and recovery commands', () => {

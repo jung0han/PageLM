@@ -3,6 +3,7 @@ set -eu
 
 ENV_FILE=${PAGELM_ENV_FILE:-/srv/secrets/pagelm/production.env}
 COMPOSE_FILE=${PAGELM_COMPOSE_FILE:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/compose.production.yaml}
+TRAEFIK_OVERRIDE=${PAGELM_TRAEFIK_OVERRIDE:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/compose.production.traefik.yaml}
 PROJECT=${PAGELM_PROJECT:-qai-pagelm}
 STATE_DIR=${PAGELM_STATE_DIR:-/srv/state/pagelm}
 EVIDENCE_FILE=${PAGELM_EVIDENCE_FILE:-$STATE_DIR/readiness.json}
@@ -24,7 +25,13 @@ printf '%s' "$PAGELM_FRONTEND_IMAGE" | grep -Eq '@sha256:[0-9a-fA-F]{64}$' || fa
 printf '%s' "$PAGELM_BACKEND_IMAGE" | grep -Fq ":$PAGELM_RELEASE_SHA@" || fail "backend image tag must carry the release SHA"
 printf '%s' "$PAGELM_FRONTEND_IMAGE" | grep -Fq ":$PAGELM_RELEASE_SHA@" || fail "frontend image tag must carry the release SHA"
 
-compose() { docker compose --env-file "$ENV_FILE" --project-name "$PROJECT" --file "$COMPOSE_FILE" "$@"; }
+compose() {
+  if [ -n "${TRAEFIK_OVERRIDE:-}" ]; then
+    docker compose --env-file "$ENV_FILE" --project-name "$PROJECT" --file "$COMPOSE_FILE" --file "$TRAEFIK_OVERRIDE" "$@"
+  else
+    docker compose --env-file "$ENV_FILE" --project-name "$PROJECT" --file "$COMPOSE_FILE" "$@"
+  fi
+}
 write_evidence() {
   mkdir -p "$(dirname -- "$EVIDENCE_FILE")"
   umask 077
@@ -41,9 +48,17 @@ readiness() {
 }
 isolated_readiness() {
   original_project=$PROJECT
+  original_override=${TRAEFIK_OVERRIDE:-}
   PROJECT="${PROJECT}-isolated-${PAGELM_RELEASE_SHA}"
+  TRAEFIK_OVERRIDE=
   readiness
+  if [ "${PAGELM_ISOLATED_REMOVE_VOLUMES:-false}" = true ]; then
+    compose down --volumes
+  else
+    compose down
+  fi
   PROJECT=$original_project
+  TRAEFIK_OVERRIDE=$original_override
 }
 status() { compose ps; }
 deploy() {
@@ -66,5 +81,5 @@ case "${1:-}" in
   status) status ;;
   deploy) deploy ;;
   rollback) rollback ;;
-  *) fail "usage: $0 {readiness|status|deploy|rollback}" ;;
+  *) fail "usage: $0 {readiness|isolated-readiness|status|deploy|rollback}" ;;
 esac
