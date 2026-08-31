@@ -30,6 +30,7 @@ function server() {
     const ROUTES = [];
     const WARES = [];
     const WS_ROUTES = [];
+    const WS_WARES = [];
     const wss = new WebSocket.Server({ noServer: true });
     const SERVER = http.createServer((req, res) => {
         let u = parse(req.url, true);
@@ -66,7 +67,7 @@ function server() {
         };
         next();
     });
-    SERVER.on('upgrade', (req, socket, head) => {
+    SERVER.on('upgrade', async (req, socket, head) => {
         let u = parse(req.url || '', true);
         let path = u.pathname;
         if (!path || path.includes('..') || /[\0-\x1F\x7F]/.test(path)) {
@@ -76,8 +77,27 @@ function server() {
         for (let i = 0; i < WS_ROUTES.length; i++) {
             let r = WS_ROUTES[i];
             if (r.path === path) {
+                try {
+                    for (const middleware of WS_WARES)
+                        await middleware(req);
+                }
+                catch (error) {
+                    const status = Number(error?.statusCode) || 503;
+                    const message = status === 403 ? 'Forbidden' : status === 503 ? 'Service Unavailable' : 'Unauthorized';
+                    socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+                    socket.destroy();
+                    return;
+                }
                 wss.handleUpgrade(req, socket, head, (ws) => {
                     ws.req = req;
+                    const expiresAt = Number(req.auth?.expiresAt || 0);
+                    let expiryTimer;
+                    if (expiresAt > 0) {
+                        const remaining = expiresAt - Date.now();
+                        if (remaining <= 0) return ws.close(1008, 'session expired');
+                        expiryTimer = setTimeout(() => ws.close(1008, 'session expired'), remaining);
+                    }
+                    ws.once('close', () => { if (expiryTimer) clearTimeout(expiryTimer); });
                     r.handler(ws, req);
                 });
                 return;
@@ -112,7 +132,7 @@ function server() {
     };
     const add = (a, b, c) => { ROUTES.push({ method: a.toUpperCase(), path: b, handler: c }); };
     const use = (a) => { WARES.push(a); };
-    const listen = (a, b) => { SERVER.setTimeout(10000); SERVER.listen(a, b); };
+    const listen = (a, b, c) => { SERVER.setTimeout(10000); return SERVER.listen(a, b, c); };
     const all = (a, b) => { add('ALL', a, b); };
     const getRoutes = () => ROUTES.reduce((acc, { method, path }) => ((acc[method] = acc[method] || []).push(path), acc), {});
     const serverStatic = (endpoint, dir) => {
@@ -183,7 +203,9 @@ function server() {
     });
     return {
         use,
+        useWs: (middleware) => WS_WARES.push(middleware),
         listen,
+        close: (callback) => SERVER.close(callback),
         all,
         serverStatic,
         routes: ROUTES,

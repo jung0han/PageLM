@@ -1,21 +1,6 @@
-import cors from 'cors';
-import server from '../utils/server/server'
-import { registerRoutes } from './router'
-import { loggerMiddleware } from './middleware'
+import { createApp } from './app'
 
-const app = server()
-
-app.use(loggerMiddleware)
-app.use(cors({
-  origin: "*",
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-app.options('*', cors());
-app.use(app.serverStatic("/storage", "./storage"))
-
-registerRoutes(app)
+const app = createApp()
 
 app.listen(Number.parseInt(process.env.PORT || '5000'), () => {
   console.log(`[pagelm] running on ${process.env.VITE_BACKEND_URL}`)

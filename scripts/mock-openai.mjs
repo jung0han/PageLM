@@ -15,9 +15,41 @@ function send(res, status, payload) {
 
 http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") return send(res, 200, { ok: true })
+  if (req.method === "GET" && req.url?.startsWith("/oidc/authorize")) {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const callback = new URL(url.searchParams.get("redirect_uri"))
+    callback.searchParams.set("code", "candidate-person")
+    callback.searchParams.set("state", url.searchParams.get("state") || "")
+    res.writeHead(302, { location: callback.toString() })
+    return res.end()
+  }
+  if (req.method === "GET" && req.url === "/oidc/userinfo") {
+    return send(res, 200, { sub: "candidate-person" })
+  }
+  if (req.method === "GET" && req.url?.startsWith("/qai/person")) {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const subject = url.searchParams.get("authentik_sub")
+    if (subject !== "candidate-person") return send(res, 404, { error: "not found" })
+    return send(res, 200, {
+      id: "candidate-qai-person",
+      authentikSub: subject,
+      classification: "person",
+      active: true,
+      scimDeleted: false,
+    })
+  }
   let body = ""
   req.on("data", chunk => { body += chunk })
   req.on("end", () => {
+    if (req.method === "POST" && req.url === "/oidc/token") {
+      return send(res, 200, {
+        access_token: "candidate-access-token",
+        refresh_token: "candidate-refresh-token",
+        token_type: "Bearer",
+        expires_in: 3600,
+      })
+    }
+    if (req.method === "POST" && req.url === "/oidc/revoke") return send(res, 200, { ok: true })
     let input
     try { input = JSON.parse(body || "{}") } catch { return send(res, 400, { error: { message: "invalid JSON" } }) }
 

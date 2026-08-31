@@ -78,6 +78,12 @@ export type ChatEvent =
 type O<T> = Promise<T>;
 type AnswerPayload = string | { answer: string; flashcards?: FlashCard[] };
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+  }
+}
+
 const timeoutCtl = (ms: number) => {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), ms);
@@ -91,10 +97,17 @@ async function req<T = unknown>(
   const { timeout = env.timeout, ...rest } = init;
   const { signal, done } = timeoutCtl(timeout);
   try {
-    const r = await fetch(url, { signal, ...rest });
+    let r = await fetch(url, { signal, credentials: "include", ...rest });
+    if (r.status === 401 && !url.endsWith("/auth/refresh")) {
+      const refreshed = await fetch(`${env.backend}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (refreshed.ok) r = await fetch(url, { signal, credentials: "include", ...rest });
+    }
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
-      throw new Error(`http ${r.status}: ${txt || r.statusText}`);
+      throw new ApiError(r.status, `http ${r.status}: ${txt || r.statusText}`);
     }
     const ct = r.headers.get("content-type") || "";
     if (ct.includes("application/json")) return (await r.json()) as T;
@@ -102,6 +115,20 @@ async function req<T = unknown>(
   } finally {
     done();
   }
+}
+
+export type AuthenticatedPerson = { id: string };
+
+export function getCurrentPerson() {
+  return req<{ ok: true; person: AuthenticatedPerson }>(`${env.backend}/auth/me`);
+}
+
+export function loginUrl(returnTo = window.location.pathname + window.location.search) {
+  return `${env.backend}/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export async function logout() {
+  await req<unknown>(`${env.backend}/auth/logout`, { method: "POST" });
 }
 
 const jsonHeaders = (_?: unknown) => {

@@ -12,6 +12,8 @@ services:
       timeout: 2s
       retries: 6
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:14010:4010"
 
   backend:
     image: ${CANDIDATE_BACKEND_IMAGE:-qai-pagelm-backend:candidate}
@@ -36,6 +38,15 @@ services:
       OPENAI_EMBED_BASE_URL: ${CANDIDATE_OPENAI_EMBED_BASE_URL:-http://mock-openai:4010/v1}
       OPENAI_MODEL: ${CANDIDATE_OPENAI_MODEL:-candidate-chat}
       OPENAI_EMBED_MODEL: ${CANDIDATE_OPENAI_EMBED_MODEL:-candidate-embedding}
+      AUTHENTIK_AUTHORIZATION_URL: http://127.0.0.1:14010/oidc/authorize
+      AUTHENTIK_TOKEN_URL: http://mock-openai:4010/oidc/token
+      AUTHENTIK_USERINFO_URL: http://mock-openai:4010/oidc/userinfo
+      AUTHENTIK_REVOCATION_URL: http://mock-openai:4010/oidc/revoke
+      AUTHENTIK_CLIENT_ID: ${CANDIDATE_AUTHENTIK_CLIENT_ID:-candidate-pagelm}
+      AUTHENTIK_CLIENT_SECRET: ${CANDIDATE_AUTHENTIK_CLIENT_SECRET:-candidate-local-stub}
+      AUTHENTIK_REDIRECT_URI: http://127.0.0.1:15000/auth/callback
+      QAI_PERSON_RESOLVER_URL: http://mock-openai:4010/qai/person
+      QAI_PERSON_RESOLVER_TOKEN: ${CANDIDATE_QAI_RESOLVER_TOKEN:-candidate-local-stub}
     volumes:
       - pagelm-storage:/app/storage
     ports:

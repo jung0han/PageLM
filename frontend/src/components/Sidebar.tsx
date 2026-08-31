@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { getChats } from "../lib/api";
+import { getChats, loginUrl, logout } from "../lib/api";
 
 interface Chat {
   id: string;
@@ -28,6 +28,11 @@ export default function Sidebar() {
     idk?.classList.toggle("hidden");
     document.getElementById("idk0")?.classList.toggle("md:rounded-r-none")
     setIsToggled(!isToggled)
+  }
+
+  async function signOut() {
+    await logout().catch(() => undefined)
+    window.location.assign(loginUrl("/"))
   }
 
   return (
@@ -81,6 +86,9 @@ export default function Sidebar() {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M5.24472 6.45492C5 7.20808 5 8.13872 5 10V17.3874C5 19.3045 5 20.2631 5.34196 20.77C5.75971 21.3893 6.48778 21.7242 7.22986 21.6383C7.8373 21.568 8.56509 20.9442 10.0207 19.6966C10.6614 19.1474 10.9818 18.8728 11.3337 18.7484C11.7648 18.5961 12.2352 18.5961 12.6663 18.7484C13.0182 18.8728 13.3386 19.1474 13.9793 19.6965C15.4349 20.9442 16.1627 21.568 16.7701 21.6383C17.5122 21.7242 18.2403 21.3893 18.658 20.77C19 20.2631 19 19.3045 19 17.3874V10C19 8.13872 19 7.20808 18.7553 6.45492C18.2607 4.93273 17.0673 3.73931 15.5451 3.24472C14.7919 3 13.8613 3 12 3C10.1387 3 9.20808 3 8.45492 3.24472C6.93273 3.73931 5.73931 4.93273 5.24472 6.45492ZM12 5.25C11.5858 5.25 11.25 5.58579 11.25 6C11.25 6.41421 11.5858 6.75 12 6.75C13.7949 6.75 15.25 8.20507 15.25 10C15.25 10.4142 15.5858 10.75 16 10.75C16.4142 10.75 16.75 10.4142 16.75 10C16.75 7.37665 14.6234 5.25 12 5.25Z" fill="currentColor" /></svg>
           </Link>
         </nav>
+        <button type="button" onClick={signOut} className="p-2 rounded-xl hover:bg-stone-900 hover:text-stone-200" aria-label="Sign out" title="Sign out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-6"><path d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3-3m-3 3 3 3m0-3H3" /></svg>
+        </button>
       </div>
     </aside>
   )
