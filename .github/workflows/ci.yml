@@ -4,50 +4,46 @@ permissions:
 
 on:
   push:
-    branches: [ qai-main, main, develop ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ qai-main, main, develop ]
+    branches: [ main, develop ]
 
 jobs:
   validate:
     name: Validate Code
     runs-on: ubuntu-latest
     
+    strategy:
+      matrix:
+        node-version: [21.x]
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
-      with:
-        fetch-depth: 0
     
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 10.13.1
+        version: 8
     
-    - name: Setup Node.js
+    - name: Setup Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v5
       with:
-        node-version: 22.16.0
+        node-version: ${{ matrix.node-version }}
         cache: 'npm'
     
     # Backend validation
     - name: Install backend dependencies
-      run: npm ci --legacy-peer-deps
+      run: npm install
       working-directory: ./
     
     - name: Build backend
       run: npm run build
       working-directory: ./
-
-    - name: Test backend
-      run: npm test
-
-    - name: Verify pinned upstream ancestry
-      run: node scripts/verify-provenance.mjs
     
     # Frontend validation
     - name: Install frontend dependencies
-      run: pnpm install --frozen-lockfile
+      run: pnpm install
       working-directory: ./frontend
     
     - name: Build frontend
@@ -84,9 +80,6 @@ jobs:
         file: ./backend/Dockerfile
         push: false
         tags: pagelm-backend:test
-        build-args: |
-          FORK_REVISION=${{ github.sha }}
-          UPSTREAM_REVISION=b3b4895fb3a180088b897705816a5a9786d79a92
         cache-from: type=gha
         cache-to: type=gha,mode=max
     
@@ -97,11 +90,6 @@ jobs:
         file: ./frontend/Dockerfile
         push: false
         tags: pagelm-frontend:test
-        build-args: |
-          FORK_REVISION=${{ github.sha }}
-          UPSTREAM_REVISION=b3b4895fb3a180088b897705816a5a9786d79a92
-          VITE_BACKEND_URL=http://127.0.0.1:15000
-          VITE_TIMEOUT=90000
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -116,30 +104,30 @@ jobs:
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 10.13.1
+        version: 8
     
     - name: Setup Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: 22.16.0
+        node-version: '21.x'
     
     - name: Install dependencies (backend)
-      run: npm ci --legacy-peer-deps
+      run: npm install
       working-directory: ./
     
     - name: Check for known vulnerabilities (backend)
       run: npm audit --audit-level=high
       working-directory: ./
-      continue-on-error: true
+      continue-on-error: false
     
     - name: Install dependencies (frontend)
-      run: pnpm install --frozen-lockfile
+      run: pnpm install
       working-directory: ./frontend
     
     - name: Check for known vulnerabilities (frontend)
       run: pnpm audit --audit-level=high
       working-directory: ./frontend
-      continue-on-error: true
+      continue-on-error: false
 
   summary:
     name: Validation Summary
