@@ -1,3 +1,10 @@
+## Project memory
+
+Before architecture, domain, learning-scope, migration, deployment, or test-spec
+work, search [lat.md/](lat.md/) with `lat search`. Update the owning
+current-state page only when its fact changes and complete graph changes with
+`lat check`. `CONTEXT.md` and accepted ADRs remain authoritative.
+
 ## Agent skills
 
 ### Issue tracker
