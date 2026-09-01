@@ -47,7 +47,7 @@ export function chatRoutes(app: any) {
     ws.send(JSON.stringify({ type: "ready", chatId }));
   });
 
-  app.post("/chat", async (req: any, res: any, next: any) => {
+  app.post("/chat", async (req: any, res: any) => {
     const t0 = Date.now();
     try {
       const ct = String(req.headers["content-type"] || "");
@@ -161,8 +161,11 @@ export function chatRoutes(app: any) {
         console.error("[chat] runner failed", { chatId: id });
       });
     } catch (e: any) {
-      console.error("[chat] request failed");
-      next(e);
+      const errorClass = typeof e?.name === "string" && /^[A-Za-z][A-Za-z0-9]*$/.test(e.name) ? e.name : "Error";
+      const errorCode = typeof e?.code === "string" && /^[A-Z0-9_]+$/.test(e.code) ? e.code : "unknown";
+      console.error("[chat] request failed", { errorClass, errorCode });
+      if (!res.headersSent) res.status(500).send({ ok: false, error: "chat_initialization_failed" });
+      else res.destroy();
     }
   });
 

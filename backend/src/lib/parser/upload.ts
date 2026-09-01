@@ -14,7 +14,7 @@ export type UpFile = { path: string; filename: string; mimeType: string }
 
 export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: string; chatId?: string; model?: string; files: UpFile[] }> {
   return new Promise((resolve, reject) => {
-    const bb = Busboy({ headers: req.headers })
+    const bb = Busboy({ headers: req.headers, defParamCharset: 'utf8' })
     let q = ''
     let chatId = ''
     let model = ''
@@ -31,10 +31,18 @@ export function parseMultipart(req: any, ownerSubject: string): Promise<{ q: str
       const mimeType = info?.mimeType || info?.mime || 'application/octet-stream'
       const ownerDir = path.join(str, createHash('sha256').update(ownerSubject).digest('hex'))
       fs.mkdirSync(ownerDir, { recursive: true })
-      const fp = path.join(ownerDir, `${randomUUID()}-${path.basename(filename)}`)
+      // The original name is display metadata. Keeping it out of the storage
+      // component avoids filesystem limits and special-name behavior.
+      const fp = path.join(ownerDir, randomUUID())
       const ws = fs.createWriteStream(fp)
-      file.on('error', e => { failed = true; reject(e) })
-      ws.on('error', e => { failed = true; reject(e) })
+      const fail = (error: unknown) => {
+        if (failed) return
+        failed = true
+        fs.promises.unlink(fp).catch(() => undefined)
+        reject(error)
+      }
+      file.on('error', fail)
+      ws.on('error', fail)
       ws.on('finish', () => { files.push({ path: fp, filename, mimeType }); pending--; done() })
       file.pipe(ws)
     })
