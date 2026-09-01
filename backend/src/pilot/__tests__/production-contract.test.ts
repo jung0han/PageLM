@@ -30,6 +30,12 @@ describe('production deployment contract', () => {
     expect(release).not.toMatch(/docker compose config/)
   })
 
+  test('wires the reviewed corporate CA bundle into the Node backend', () => {
+    expect(compose).toContain('NODE_EXTRA_CA_CERTS: /run/corporate-trust/workops-ca-bundle.pem')
+    expect(compose).toContain('${PAGELM_CORPORATE_CA_BUNDLE_FILE:-/var/lib/workops/corporate-trust/workops-ca-bundle.pem}:/run/corporate-trust/workops-ca-bundle.pem:ro')
+    expect(compose).not.toContain('NODE_TLS_REJECT_UNAUTHORIZED')
+  })
+
   test('ships the secret-safe production smoke entrypoint', () => {
     const smoke = fs.readFileSync(path.join(root, 'scripts/production-smoke.mjs'), 'utf8')
     expect(smoke).toContain('--origin')

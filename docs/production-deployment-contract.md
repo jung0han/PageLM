@@ -18,7 +18,9 @@ same values passed to Milvus.
 The backend joins `proxy-net` only as a caller and must not claim the QAI-owned
 `backend-v2` alias. WorkOps supplies
 `QAI_PERSON_RESOLVER_URL=http://backend-v2:8000/api/v1/internal/qai/person` in
-the production environment.
+the production environment. The backend also mounts the reviewed qai-prod
+corporate CA bundle read-only and exposes it to Node through
+`NODE_EXTRA_CA_CERTS`; TLS verification remains enabled.
 
 Lifecycle commands are `readiness`, `isolated-readiness`, `status`, `deploy`,
 and `rollback`. `isolated-readiness` uses a release-specific Compose project

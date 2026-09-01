@@ -11,9 +11,11 @@ services:
       MILVUS_ADDRESS: milvus:19530
       MINIO_ENDPOINT: minio:9000
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/pagelm-gcloud.json
+      NODE_EXTRA_CA_CERTS: /run/corporate-trust/workops-ca-bundle.pem
     volumes:
       - pagelm-storage:/app/storage
       - ${PAGELM_GOOGLE_APPLICATION_CREDENTIALS_FILE:-/home/dongwoo.jeong/.config/gcloud/application_default_credentials.json}:/run/secrets/pagelm-gcloud.json:ro
+      - ${PAGELM_CORPORATE_CA_BUNDLE_FILE:-/var/lib/workops/corporate-trust/workops-ca-bundle.pem}:/run/corporate-trust/workops-ca-bundle.pem:ro
     networks:
       internal: {}
       proxy-net: {}
