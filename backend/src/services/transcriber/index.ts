@@ -27,9 +27,14 @@ export type StudyMaterials = {
     timestamps?: { time: number; content: string; topic: string; }[];
 };
 
-const openai = new OpenAI({
-    apiKey: config.openai,
-});
+let openai: OpenAI | undefined;
+
+function openAIClient(): OpenAI {
+    if (!config.openai) {
+        throw new Error('OpenAI API key not configured');
+    }
+    return openai ||= new OpenAI({ apiKey: config.openai });
+}
 
 export async function transcribeAudio(filePath: string, provider: TranscriptionProvider = 'openai'): Promise<TranscriptionResult> {
     let result: TranscriptionResult;
@@ -60,9 +65,10 @@ export async function transcribeAudio(filePath: string, provider: TranscriptionP
 
 async function transcribeWithOpenAI(filePath: string): Promise<TranscriptionResult> {
     try {
+        const client = openAIClient();
         const audioFile = fs.createReadStream(filePath);
 
-        const transcription = await openai.audio.transcriptions.create({
+        const transcription = await client.audio.transcriptions.create({
             file: audioFile,
             model: 'whisper-1',
         });
@@ -244,6 +250,7 @@ async function transcribeWithElevenLabs(filePath: string): Promise<Transcription
 
 async function generateStudyMaterials(transcriptionText: string): Promise<StudyMaterials> {
     try {
+        const client = openAIClient();
         const prompt = `Analyze this transcription and create organized study materials:
 
 TRANSCRIPTION:
@@ -266,7 +273,7 @@ Please provide a JSON response with the following structure:
 
 Make it educational and useful for studying. Focus on extracting the most important information for learning purposes.`;
 
-        const completion = await openai.chat.completions.create({
+        const completion = await client.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
                 {
