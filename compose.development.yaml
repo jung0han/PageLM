@@ -11,7 +11,9 @@ services:
       - sh
       - -ec
       - |
-        npm ci
+        # package-lock.json can lag package.json on this fast-moving project;
+        # resolve the bind-mounted development checkout without rewriting it.
+        npm install --no-package-lock
         exec npm run dev
     env_file: *development_env_file
     environment:
