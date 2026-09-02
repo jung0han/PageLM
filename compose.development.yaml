@@ -43,7 +43,7 @@ services:
       - -ec
       - |
         corepack enable
-        pnpm install --frozen-lockfile
+        pnpm install --frozen-lockfile --ignore-scripts
         exec pnpm dev --host 0.0.0.0 --port 5173
     env_file: *development_env_file
     environment:
