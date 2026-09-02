@@ -14,7 +14,7 @@ services:
         # package-lock.json can lag package.json on this fast-moving project;
         # resolve the bind-mounted development checkout without rewriting it.
         npm install --no-package-lock
-        exec npm run dev
+        exec npx tsx backend/src/core/index.ts
     env_file: *development_env_file
     environment:
       NODE_ENV: development
